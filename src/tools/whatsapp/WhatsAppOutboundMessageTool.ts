@@ -17,7 +17,7 @@ export class WhatsAppOutboundMessageTool implements AgentTool {
   name = 'WhatsAppOutboundMessageTool';
   description = [
     'Send an outbound WhatsApp text message to a direct contact when the user explicitly asks to message, text, tell, or send something to someone.',
-    'Use this for requests like "send a message to Mohammed saying good night"; do not use WhatsAppChatArchiveTool for sending messages.'
+    'Use this for requests like "send a message to Amina saying good night"; do not use WhatsAppChatArchiveTool for sending messages.'
   ].join(' ');
   inputSchema = {
     type: 'object',

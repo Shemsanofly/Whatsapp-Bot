@@ -114,7 +114,7 @@ Outbound WhatsApp message example:
 
 ```text
 /agent send WhatsApp message to 255712345678 saying "Hello, I will call you later."
-/agent send a message to Mohammed saying "Good night."
+/agent send a message to Amina saying "Good night."
 ```
 
 Outbound sending is limited to direct contacts by phone number, direct WhatsApp JID, `@lid` JID, or exact archived contact/display name. If a contact name matches multiple chats, the assistant refuses to send and asks for the exact number/JID. Group and broadcast sends are blocked in this phase.

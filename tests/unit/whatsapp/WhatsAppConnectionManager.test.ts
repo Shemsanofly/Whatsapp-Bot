@@ -129,7 +129,7 @@ describe('WhatsAppConnectionManager', () => {
     handlers.get('contacts.update')?.([
       {
         id: '16033834344469@lid',
-        notify: 'Mohammed Hackthon'
+        notify: 'Amina Client'
       }
     ]);
 
@@ -140,7 +140,7 @@ describe('WhatsAppConnectionManager', () => {
       },
       {
         remoteJid: '16033834344469@lid',
-        displayName: 'Mohammed Hackthon'
+        displayName: 'Amina Client'
       }
     ]);
   });
@@ -161,8 +161,8 @@ describe('WhatsAppConnectionManager', () => {
       contacts: [
         {
           id: '255712345678@s.whatsapp.net',
-          name: 'Mohammed Hackathon',
-          notify: 'Mohammed'
+          name: 'Amina Client',
+          notify: 'Amina'
         }
       ]
     });
@@ -170,7 +170,7 @@ describe('WhatsAppConnectionManager', () => {
     expect(seen).toEqual([
       {
         remoteJid: '255712345678@s.whatsapp.net',
-        displayName: 'Mohammed Hackathon'
+        displayName: 'Amina Client'
       }
     ]);
   });

@@ -74,7 +74,7 @@ describe('WhatsAppOutboundMessageTool', () => {
       {
         id: 'chat-1',
         remoteJid: '16033834344469@lid',
-        displayName: 'Mohammed Hackthon',
+        displayName: 'Amina Client',
         isGroup: false,
         lastMessageAt: new Date('2026-08-29T21:56:39.000Z')
       }
@@ -82,12 +82,12 @@ describe('WhatsAppOutboundMessageTool', () => {
 
     const result = await tool.execute({
       action: 'send',
-      recipient: 'Mohammed Hackthon',
+      recipient: 'Amina Client',
       message: 'Good night'
     }, { userId: 'user-1', timezone: 'Africa/Dar_es_Salaam' });
 
     expect(result.ok).toBe(true);
-    expect(result.message).toBe('Sent WhatsApp message to Mohammed Hackthon.');
+    expect(result.message).toBe('Sent WhatsApp message to Amina Client.');
     expect(sender.sent).toEqual([
       { to: '16033834344469@lid', text: 'Good night' }
     ]);
@@ -99,14 +99,14 @@ describe('WhatsAppOutboundMessageTool', () => {
       {
         id: 'chat-1',
         remoteJid: '16033834344469@lid',
-        displayName: 'Mohammed Hackthon',
+        displayName: 'Amina Client',
         isGroup: false,
         lastMessageAt: new Date('2026-08-29T21:56:39.000Z')
       },
       {
         id: 'chat-2',
         remoteJid: '150744997077134@lid',
-        displayName: 'Mohammed H',
+        displayName: 'Amina Home',
         isGroup: false,
         lastMessageAt: new Date('2026-08-29T21:56:15.000Z')
       }
@@ -114,14 +114,14 @@ describe('WhatsAppOutboundMessageTool', () => {
 
     const result = await tool.execute({
       action: 'send',
-      recipient: 'Mohammed',
+      recipient: 'Amina',
       message: 'Good night'
     }, { userId: 'user-1', timezone: 'Africa/Dar_es_Salaam' });
 
     expect(result.ok).toBe(false);
-    expect(result.message).toContain('I found multiple WhatsApp chats matching "Mohammed"');
-    expect(result.message).toContain('Mohammed Hackthon (16033834344469@lid)');
-    expect(result.message).toContain('Mohammed H (150744997077134@lid)');
+    expect(result.message).toContain('I found multiple WhatsApp chats matching "Amina"');
+    expect(result.message).toContain('Amina Client (16033834344469@lid)');
+    expect(result.message).toContain('Amina Home (150744997077134@lid)');
     expect(sender.sent).toEqual([]);
   });
 

@@ -236,7 +236,7 @@ describe('AgentOrchestrator', () => {
       inputSchema: { type: 'object' },
       execute: async (input) => {
         observedToolInput = input;
-        return { ok: true, message: 'Sent WhatsApp message to Mohammed Hackthon.' };
+        return { ok: true, message: 'Sent WhatsApp message to Amina Client.' };
       }
     };
     const llm: LLMProvider = {
@@ -252,13 +252,13 @@ describe('AgentOrchestrator', () => {
     const response = await orchestrator.handleMessage({
       whatsappNumber: '255712345678',
       messageId: 'message-send',
-      text: 'send a message to Mohammed Hackthon saying Good night'
+      text: 'send a message to Amina Client saying Good night'
     });
 
-    expect(response).toBe('Sent WhatsApp message to Mohammed Hackthon.');
+    expect(response).toBe('Sent WhatsApp message to Amina Client.');
     expect(observedToolInput).toEqual({
       action: 'send',
-      recipient: 'Mohammed Hackthon',
+      recipient: 'Amina Client',
       message: 'Good night'
     });
   });
@@ -284,7 +284,7 @@ describe('AgentOrchestrator', () => {
     const response = await orchestrator.handleMessage({
       whatsappNumber: '255700000000',
       messageId: 'message-public-send',
-      text: 'send a message to Mohammed saying hi',
+      text: 'send a message to Amina saying hi',
       accessLevel: 'public'
     });
 

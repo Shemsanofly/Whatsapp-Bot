@@ -39,13 +39,13 @@ describe('WhatsAppChatArchiveService', () => {
   it('finds archived chats by contact name', async () => {
     const service = new WhatsAppChatArchiveService(new FakeWhatsAppChatArchiveRepository());
 
-    const chats = await service.findChats('Mohammed Hackthon');
+    const chats = await service.findChats('Amina Client');
 
     expect(chats).toEqual([
       {
         id: 'chat-1',
         remoteJid: '16033834344469@lid',
-        displayName: 'Mohammed Hackthon',
+        displayName: 'Amina Client',
         isGroup: false,
         lastMessageAt: new Date('2026-08-29T21:56:39.000Z')
       }
