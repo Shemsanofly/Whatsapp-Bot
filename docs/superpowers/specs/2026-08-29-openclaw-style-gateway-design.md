@@ -4,7 +4,7 @@ Date: 2026-08-29
 
 ## Goal
 
-Convert the current WhatsApp-only personal AI agent into an OpenClaw-style personal assistant platform while keeping the existing working foundation: TypeScript, Express, Prisma, Baileys WhatsApp runtime, LLM providers, tools, reminders, calendar, memory, and tests.
+Convert Hawa from a WhatsApp-only AI agent into an OpenClaw-style personal assistant platform while keeping the existing working foundation: TypeScript, Express, Prisma, Baileys WhatsApp runtime, LLM providers, tools, reminders, calendar, memory, and tests.
 
 The project will not vendor or replace itself with upstream `openclaw/openclaw`. Instead, it will adopt the key architecture that makes OpenClaw manageable:
 

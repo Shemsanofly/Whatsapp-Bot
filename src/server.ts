@@ -86,7 +86,7 @@ const app = createApp({
 const server = createServer(app);
 
 server.listen(env.PORT, () => {
-  logger.info({ port: env.PORT }, 'Personal AI agent API listening');
+  logger.info({ port: env.PORT }, 'Hawa WhatsApp bot API listening');
 });
 
 startGatewayRuntime().catch((error) => {

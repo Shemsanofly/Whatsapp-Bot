@@ -1,6 +1,6 @@
-# OpenClaw-Style Personal AI Agent over WhatsApp
+# Hawa WhatsApp Bot
 
-This is a TypeScript backend for a personal AI operating layer controlled through WhatsApp. The runtime now follows an OpenClaw-style Gateway architecture: channels connect to a local Gateway, the Gateway routes messages to the agent, and tools are exposed as capabilities.
+Hawa is a TypeScript WhatsApp AI agent that can reply to direct messages from public users and provide owner-only personal assistant tools for the configured owner account. The runtime follows an OpenClaw-style Gateway architecture: channels connect to a local Gateway, the Gateway routes messages to the agent, and tools are exposed as capabilities.
 
 This is not a full fork of upstream `openclaw/openclaw`. It keeps this project's smaller, easier-to-manage codebase while adopting the same practical shape: gateway, channels, tools, memory, and always-on messaging.
 
@@ -60,7 +60,7 @@ GOOGLE_CALENDAR_CREDENTIALS={"type":"service_account",...}
 GOOGLE_CALENDAR_ID=primary
 ```
 
-The assistant only reports Google Calendar success after the Google API returns an event id. If Google Calendar fails, the request fails gracefully.
+Hawa only reports Google Calendar success after the Google API returns an event id. If Google Calendar fails, the request fails gracefully.
 
 ## Health
 
@@ -117,7 +117,7 @@ Outbound WhatsApp message example:
 /agent send a message to Amina saying "Good night."
 ```
 
-Outbound sending is limited to direct contacts by phone number, direct WhatsApp JID, `@lid` JID, or exact archived contact/display name. If a contact name matches multiple chats, the assistant refuses to send and asks for the exact number/JID. Group and broadcast sends are blocked in this phase.
+Outbound sending is limited to direct contacts by phone number, direct WhatsApp JID, `@lid` JID, or exact archived contact/display name. If a contact name matches multiple chats, Hawa refuses to send and asks for the exact number/JID. Group and broadcast sends are blocked in this phase.
 
 ## WhatsApp Inbox Mode
 
@@ -127,7 +127,7 @@ The runtime archives incoming WhatsApp text messages so the owner can ask questi
 - "What deadlines or meetings did people mention today?"
 - "List my recent chats."
 
-By default, `WHATSAPP_REPLY_TO_ALL=true`, so anyone who sends a direct WhatsApp message to the connected agent number receives an AI reply. The agent prompt supports both Swahili and English, including mixed Swahili-English messages, and tries to answer in the same language the user used.
+By default, `WHATSAPP_REPLY_TO_ALL=true`, so anyone who sends or texts a direct WhatsApp message to the connected agent number receives an AI reply from Hawa. The agent prompt supports both Swahili and English, including mixed Swahili-English messages, and tries to answer in the same language the user used.
 
 Numbers in `ALLOWED_WHATSAPP_NUMBERS` are treated as owners. Owner chats can use owner-only capabilities such as reading the archived WhatsApp inbox and sending outbound WhatsApp messages. Public users can chat with the AI and use normal safe tools, but owner-only WhatsApp tools are not exposed to them.
 
@@ -139,14 +139,14 @@ WHATSAPP_REPLY_TO_ALL=false
 
 Messages from other chats are still stored for the owner's summaries/action-item extraction.
 
-If you scan your own WhatsApp account and want to command the assistant from your "message yourself" chat, set:
+If you scan your own WhatsApp account and want to command Hawa from your "message yourself" chat, set:
 
 ```env
 WHATSAPP_PROCESS_FROM_ME_COMMANDS=true
 WHATSAPP_FROM_ME_COMMAND_PREFIX=/agent
 ```
 
-Then send messages like `/agent summarize my recent WhatsApp chats`. The prefix prevents the assistant from treating every message you send as a command.
+Then send messages like `/agent summarize my recent WhatsApp chats`. The prefix prevents Hawa from treating every message you send as a command.
 
 Note: the archive starts from messages received while this service is running and authenticated. It does not backfill old WhatsApp history.
 
