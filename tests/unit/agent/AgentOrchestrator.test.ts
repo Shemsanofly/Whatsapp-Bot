@@ -197,6 +197,44 @@ describe('AgentOrchestrator', () => {
     expect(llmCalled).toBe(false);
   });
 
+  it('answers agent identity questions directly without querying saved memory', async () => {
+    let llmCalled = false;
+    let memoryCalled = false;
+    const memoryTool: AgentTool = {
+      name: 'MemoryTool',
+      description: 'Manages saved memory',
+      inputSchema: { type: 'object' },
+      execute: async () => {
+        memoryCalled = true;
+        return { ok: true, message: "I don't have a saved memory about that yet." };
+      }
+    };
+    const llm: LLMProvider = {
+      decide: async () => {
+        llmCalled = true;
+        return { kind: 'final', content: 'wrong path' };
+      }
+    };
+    const orchestrator = new AgentOrchestrator({
+      llm,
+      tools: new ToolRegistry([memoryTool]),
+      conversationStore,
+      timezone: 'Africa/Dar_es_Salaam'
+    });
+
+    for (const text of ['Who are you?', 'whoare you']) {
+      const response = await orchestrator.handleMessage({
+        whatsappNumber: '255712345678',
+        messageId: `message-agent-identity-${text}`,
+        text
+      });
+
+      expect(response).toMatch(/Hawa/i);
+    }
+    expect(memoryCalled).toBe(false);
+    expect(llmCalled).toBe(false);
+  });
+
   it('stores explicit remember requests without calling the LLM', async () => {
     let observedToolInput: unknown;
     const memoryTool: AgentTool = {

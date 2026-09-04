@@ -170,6 +170,13 @@ function parseDirectIntent(text: string): DirectIntent | undefined {
     };
   }
 
+  if (isAgentIdentityQuestion(normalized)) {
+    return {
+      kind: 'final',
+      content: "I'm Hawa, your WhatsApp AI agent. I can answer questions, help with planning, and assist with tasks over WhatsApp."
+    };
+  }
+
   const personQuery = parsePersonIdentityQuery(trimmed);
   if (personQuery) {
     return {
@@ -215,6 +222,20 @@ function isSelfIdentityQuestion(normalized: string): boolean {
     'mimi ni nani',
     'naitwa nani',
     'jina langu ni nani'
+  ].includes(normalized);
+}
+
+function isAgentIdentityQuestion(normalized: string): boolean {
+  return [
+    'who are you',
+    'whoare you',
+    'who r u',
+    'what are you',
+    'what is your name',
+    'whats your name',
+    "what's your name",
+    'unaitwa nani',
+    'wewe ni nani'
   ].includes(normalized);
 }
 
