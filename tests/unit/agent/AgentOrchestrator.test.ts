@@ -301,6 +301,46 @@ describe('AgentOrchestrator', () => {
     });
   });
 
+  it('sends WhatsApp commands with and-tell wording without calling the LLM', async () => {
+    let observedToolInput: unknown;
+    let llmCalled = false;
+    const outboundTool: AgentTool = {
+      name: 'WhatsAppOutboundMessageTool',
+      description: 'Sends WhatsApp messages',
+      inputSchema: { type: 'object' },
+      execute: async (input) => {
+        observedToolInput = input;
+        return { ok: true, message: 'Sent WhatsApp message to Einy.' };
+      }
+    };
+    const llm: LLMProvider = {
+      decide: async () => {
+        llmCalled = true;
+        return { kind: 'final', content: 'wrong path' };
+      }
+    };
+    const orchestrator = new AgentOrchestrator({
+      llm,
+      tools: new ToolRegistry([outboundTool]),
+      conversationStore,
+      timezone: 'Africa/Dar_es_Salaam'
+    });
+
+    const response = await orchestrator.handleMessage({
+      whatsappNumber: '255712345678',
+      messageId: 'message-send-and-tell',
+      text: 'Send a message to Einy❤️⚓️and tell him “i love you”'
+    });
+
+    expect(response).toBe('Sent WhatsApp message to Einy.');
+    expect(observedToolInput).toEqual({
+      action: 'send',
+      recipient: 'Einy❤️⚓️',
+      message: 'i love you'
+    });
+    expect(llmCalled).toBe(false);
+  });
+
   it('does not let public users use deterministic owner-only outbound shortcuts', async () => {
     let toolExecuted = false;
     const outboundTool: AgentTool = {

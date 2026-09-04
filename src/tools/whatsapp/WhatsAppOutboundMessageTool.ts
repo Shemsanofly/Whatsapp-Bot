@@ -4,7 +4,7 @@ import type { WhatsAppSender } from '../../whatsapp/types.js';
 import type { ArchivedWhatsAppChat } from '../chatArchive/types.js';
 
 export interface WhatsAppContactResolver {
-  findChats(query: string): Promise<ArchivedWhatsAppChat[]>;
+  findChats(query: string, limit?: number): Promise<ArchivedWhatsAppChat[]>;
 }
 
 const outboundMessageInputSchema = z.object({
@@ -78,11 +78,12 @@ export class WhatsAppOutboundMessageTool implements AgentTool {
     }
 
     const name = recipient.trim();
-    const matches = this.contacts ? await this.contacts.findChats(name) : [];
+    const matches = await this.findRecipientCandidates(name);
     const directMatches = matches.filter((chat) => !chat.isGroup && !isBlockedWhatsAppTarget(chat.remoteJid));
+    const bestMatch = findBestContactMatch(name, directMatches);
 
-    if (directMatches.length === 1) {
-      const chat = directMatches[0];
+    if (bestMatch.kind === 'matched') {
+      const chat = bestMatch.chat;
       return {
         ok: true,
         target: {
@@ -92,7 +93,7 @@ export class WhatsAppOutboundMessageTool implements AgentTool {
       };
     }
 
-    if (directMatches.length > 1) {
+    if (directMatches.length > 1 || bestMatch.kind === 'ambiguous') {
       return {
         ok: false,
         result: {
@@ -113,6 +114,27 @@ export class WhatsAppOutboundMessageTool implements AgentTool {
         message: `I could not find a WhatsApp contact named "${name}". Send the phone number or exact WhatsApp chat name.`
       }
     };
+  }
+
+  private async findRecipientCandidates(name: string): Promise<ArchivedWhatsAppChat[]> {
+    if (!this.contacts) {
+      return [];
+    }
+
+    const candidates = new Map<string, ArchivedWhatsAppChat>();
+    const queries = [
+      name,
+      ...tokenizeContactName(name).filter((term) => term.length >= 3)
+    ];
+
+    for (const query of queries) {
+      const matches = await this.contacts.findChats(query, 25);
+      for (const match of matches) {
+        candidates.set(match.remoteJid, match);
+      }
+    }
+
+    return [...candidates.values()];
   }
 }
 
@@ -148,4 +170,89 @@ function toDirectWhatsAppJid(value: string): { jid: string; displayName: string 
 function isBlockedWhatsAppTarget(value: string): boolean {
   const target = value.trim().toLowerCase();
   return target === 'status@broadcast' || target.endsWith('@g.us');
+}
+
+function findBestContactMatch(
+  query: string,
+  chats: ArchivedWhatsAppChat[]
+): { kind: 'matched'; chat: ArchivedWhatsAppChat } | { kind: 'ambiguous' } | { kind: 'none' } {
+  if (chats.length === 0) {
+    return { kind: 'none' };
+  }
+
+  const ranked = chats
+    .map((chat) => ({ chat, score: scoreContactMatch(query, chat) }))
+    .sort((left, right) => right.score - left.score);
+  const [best, second] = ranked;
+  if (!best) {
+    return { kind: 'none' };
+  }
+
+  if (chats.length === 1) {
+    return best.score >= 0.68 ? { kind: 'matched', chat: best.chat } : { kind: 'none' };
+  }
+
+  if (best.score >= 0.78 && (!second || best.score - second.score >= 0.15)) {
+    return { kind: 'matched', chat: best.chat };
+  }
+
+  return { kind: 'ambiguous' };
+}
+
+function scoreContactMatch(query: string, chat: ArchivedWhatsAppChat): number {
+  const queryTerms = tokenizeContactName(query);
+  const candidateTerms = tokenizeContactName(`${chat.displayName ?? ''} ${chat.remoteJid}`);
+  if (queryTerms.length === 0 || candidateTerms.length === 0) {
+    return 0;
+  }
+
+  const termScores = queryTerms.map((queryTerm) =>
+    Math.max(...candidateTerms.map((candidateTerm) => scoreTermMatch(queryTerm, candidateTerm)))
+  );
+  return termScores.reduce((sum, score) => sum + score, 0) / termScores.length;
+}
+
+function scoreTermMatch(queryTerm: string, candidateTerm: string): number {
+  if (queryTerm === candidateTerm) {
+    return 1;
+  }
+  if (candidateTerm.includes(queryTerm) || queryTerm.includes(candidateTerm)) {
+    return Math.min(queryTerm.length, candidateTerm.length) / Math.max(queryTerm.length, candidateTerm.length);
+  }
+
+  const maxLength = Math.max(queryTerm.length, candidateTerm.length);
+  if (maxLength < 4) {
+    return 0;
+  }
+  return 1 - levenshteinDistance(queryTerm, candidateTerm) / maxLength;
+}
+
+function tokenizeContactName(value: string): string[] {
+  return value
+    .normalize('NFKD')
+    .toLowerCase()
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter((term) => term.length > 1);
+}
+
+function levenshteinDistance(left: string, right: string): number {
+  const previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+
+  for (let leftIndex = 0; leftIndex < left.length; leftIndex += 1) {
+    const current = [leftIndex + 1];
+    for (let rightIndex = 0; rightIndex < right.length; rightIndex += 1) {
+      const substitutionCost = left[leftIndex] === right[rightIndex] ? 0 : 1;
+      current[rightIndex + 1] = Math.min(
+        current[rightIndex] + 1,
+        previous[rightIndex + 1] + 1,
+        previous[rightIndex] + substitutionCost
+      );
+    }
+    previous.splice(0, previous.length, ...current);
+  }
+
+  return previous[right.length] ?? 0;
 }

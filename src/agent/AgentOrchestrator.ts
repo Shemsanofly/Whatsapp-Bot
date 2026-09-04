@@ -256,6 +256,7 @@ function parsePersonIdentityQuery(text: string): string | undefined {
 
 function parseOutboundMessage(text: string): { recipient: string; message: string } | undefined {
   const patterns = [
+    /^(?:please\s+)?(?:send|text|message)\s+(?:a\s+)?(?:whatsapp\s+)?(?:message\s+)?to\s+(.+?)\s*(?:and\s+)?(?:tell|give)\s+(?:him|her|them)\s+(?:that\s+)?(.+)$/i,
     /^(?:please\s+)?(?:send|text|message)\s+(?:a\s+)?(?:whatsapp\s+)?(?:message\s+)?to\s+(.+?)\s+(?:saying|that says|with message)\s+(.+)$/i,
     /^(?:please\s+)?(?:message|text)\s+(.+?)\s+(?:saying|that says|:)\s*(.+)$/i,
     /^(?:please\s+)?tell\s+(.+?)\s+(?:that\s+)?(.+)$/i
@@ -276,5 +277,5 @@ function parseOutboundMessage(text: string): { recipient: string; message: strin
 }
 
 function stripWrappingQuotes(value: string): string {
-  return value.replace(/^["']|["']$/g, '').trim();
+  return value.replace(/^["'\u201C\u201D\u2018\u2019]|["'\u201C\u201D\u2018\u2019]$/g, '').trim();
 }

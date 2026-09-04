@@ -125,6 +125,38 @@ describe('WhatsAppOutboundMessageTool', () => {
     expect(sender.sent).toEqual([]);
   });
 
+  it('resolves a close archived contact name typo before sending', async () => {
+    const sender = new FakeWhatsAppSender();
+    const tool = new WhatsAppOutboundMessageTool(sender, new FakeContactResolver([
+      {
+        id: 'chat-1',
+        remoteJid: '255792338673@s.whatsapp.net',
+        displayName: 'Mohammed Hackathon',
+        isGroup: false,
+        lastMessageAt: new Date('2026-09-04T06:31:53.000Z')
+      },
+      {
+        id: 'chat-2',
+        remoteJid: '255688944421@s.whatsapp.net',
+        displayName: 'Zaynab Mohammed',
+        isGroup: false,
+        lastMessageAt: new Date('2026-09-04T06:00:00.000Z')
+      }
+    ]));
+
+    const result = await tool.execute({
+      action: 'send',
+      recipient: 'Mohammed Hackthon',
+      message: 'Jumaa mubarak'
+    }, { userId: 'user-1', timezone: 'Africa/Dar_es_Salaam' });
+
+    expect(result.ok).toBe(true);
+    expect(result.message).toBe('Sent WhatsApp message to Mohammed Hackathon.');
+    expect(sender.sent).toEqual([
+      { to: '255792338673@s.whatsapp.net', text: 'Jumaa mubarak' }
+    ]);
+  });
+
   it('does not send when an archived contact name is unknown', async () => {
     const sender = new FakeWhatsAppSender();
     const tool = new WhatsAppOutboundMessageTool(sender, new FakeContactResolver([]));
