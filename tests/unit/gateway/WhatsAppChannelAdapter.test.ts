@@ -93,7 +93,7 @@ describe('WhatsAppChannelAdapter', () => {
     ]);
   });
 
-  it('uses phone-number metadata for WhatsApp lid control messages', async () => {
+  it('uses phone-number metadata for WhatsApp lid control message identity', async () => {
     const connection = new FakeWhatsAppConnection();
     const adapter = new WhatsAppChannelAdapter({
       connection,
@@ -116,10 +116,44 @@ describe('WhatsAppChannelAdapter', () => {
 
     expect(emitted).toEqual([
       expect.objectContaining({
-        conversationId: '255712345678@s.whatsapp.net',
+        conversationId: '240539744137431@lid',
         senderId: '255712345678',
         accessLevel: 'owner',
         text: 'show my tasks'
+      })
+    ]);
+  });
+
+  it('emits public WhatsApp lid messages back to the same chat when phone metadata is available', async () => {
+    const connection = new FakeWhatsAppConnection();
+    const adapter = new WhatsAppChannelAdapter({
+      connection,
+      authorizer: new WhatsAppAuthorizer(['255712345678']),
+      options: {
+        replyToAll: true
+      }
+    });
+    const emitted: ChannelMessage[] = [];
+    adapter.onMessage(async (message) => {
+      emitted.push(message);
+    });
+
+    await connection.handler?.({
+      id: 'message-public-lid',
+      from: '240539744137431@lid',
+      senderPn: '255700000000@s.whatsapp.net',
+      fromMe: false,
+      pushName: 'Public LID User',
+      timestamp: new Date('2026-08-29T12:00:00.000Z'),
+      text: 'hello'
+    });
+
+    expect(emitted).toEqual([
+      expect.objectContaining({
+        conversationId: '240539744137431@lid',
+        senderId: '255700000000',
+        accessLevel: 'public',
+        text: 'hello'
       })
     ]);
   });
@@ -222,7 +256,7 @@ describe('WhatsAppChannelAdapter', () => {
     expect(archived).toHaveLength(1);
   });
 
-  it('archives but does not emit public lid messages until phone metadata is available', async () => {
+  it('emits public lid messages without phone metadata back to the same chat', async () => {
     const connection = new FakeWhatsAppConnection();
     const archived: unknown[] = [];
     const adapter = new WhatsAppChannelAdapter({
@@ -251,7 +285,14 @@ describe('WhatsAppChannelAdapter', () => {
       text: 'hello'
     });
 
-    expect(emitted).toEqual([]);
+    expect(emitted).toEqual([
+      expect.objectContaining({
+        conversationId: '240539744137431@lid',
+        senderId: '240539744137431',
+        accessLevel: 'public',
+        text: 'hello'
+      })
+    ]);
     expect(archived).toHaveLength(1);
   });
 

@@ -105,11 +105,6 @@ export class WhatsAppChannelAdapter implements ChannelAdapter {
       return;
     }
 
-    if (isPublicReply && isLidJid(message.from) && !hasPhoneNumberMetadata(message)) {
-      logger.info({ from: message.from }, 'Ignoring WhatsApp public lid message without phone metadata');
-      return;
-    }
-
     const text = this.getAgentText(message);
     if (!text) {
       logger.info({ from: message.from, fromMe: message.fromMe }, 'Ignoring WhatsApp channel message that is not an agent command');
@@ -213,26 +208,12 @@ export class WhatsAppChannelAdapter implements ChannelAdapter {
     if (isFromMeCommand && ownerNumber) {
       return `${ownerNumber}@s.whatsapp.net`;
     }
-    if (/@lid$/i.test(message.from) && message.senderPn) {
-      const senderNumber = normalizeWhatsAppNumber(message.senderPn);
-      if (senderNumber) {
-        return `${senderNumber}@s.whatsapp.net`;
-      }
-    }
     return message.from;
   }
 }
 
 function isGroupJid(value: string): boolean {
   return /@g\.us$/i.test(value);
-}
-
-function isLidJid(value: string): boolean {
-  return /@lid$/i.test(value);
-}
-
-function hasPhoneNumberMetadata(message: IncomingWhatsAppMessage): boolean {
-  return Boolean(message.senderPn || message.participantPn);
 }
 
 function isBlockedContactJid(value: string): boolean {

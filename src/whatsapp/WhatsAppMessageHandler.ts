@@ -152,12 +152,6 @@ export class WhatsAppMessageHandler {
     if (isFromMeCommand && ownerNumber) {
       return `${ownerNumber}@s.whatsapp.net`;
     }
-    if (/@lid$/i.test(message.from) && message.senderPn) {
-      const senderNumber = normalizeWhatsAppNumber(message.senderPn);
-      if (senderNumber) {
-        return `${senderNumber}@s.whatsapp.net`;
-      }
-    }
     return message.from;
   }
 }

@@ -115,7 +115,7 @@ describe('WhatsAppMessageHandler', () => {
 
     expect(observedNumber).toBe('255712345678');
     expect(sent).toEqual([
-      { to: '255712345678@s.whatsapp.net', text: 'processed show my tasks' }
+      { to: '240539744137431@lid', text: 'processed show my tasks' }
     ]);
   });
 
