@@ -1,0 +1,11 @@
+node_modules/
+dist/
+coverage/
+.env
+.whatsapp-auth*/
+logs/
+*.log
+*.db
+*.db-journal
+prisma/dev.db
+prisma/dev.db-journal

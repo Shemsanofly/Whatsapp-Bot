@@ -1,0 +1,210 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String           @id @default(cuid())
+  whatsappNumber String           @unique
+  displayName    String?
+  timezone       String
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  conversations  Conversation[]
+  messages       Message[]
+  tasks          Task[]
+  reminders      Reminder[]
+  calendarEvents CalendarEvent[]
+  memories       Memory[]
+  executions     AgentExecution[]
+
+  @@index([whatsappNumber])
+}
+
+model WhatsAppChat {
+  id            String                @id @default(cuid())
+  remoteJid     String                @unique
+  displayName   String?
+  isGroup       Boolean               @default(false)
+  lastMessageAt DateTime?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  messages      WhatsAppChatMessage[]
+
+  @@index([lastMessageAt])
+}
+
+model WhatsAppChatMessage {
+  id             String       @id @default(cuid())
+  externalId     String?      @unique
+  chatId         String
+  remoteJid      String
+  participantJid String?
+  fromMe         Boolean      @default(false)
+  text           String
+  messageAt      DateTime
+  createdAt      DateTime     @default(now())
+  chat           WhatsAppChat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  @@index([remoteJid, messageAt])
+  @@index([chatId, messageAt])
+}
+
+model Conversation {
+  id        String    @id @default(cuid())
+  userId    String
+  title     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  Message[]
+
+  @@index([userId, updatedAt])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  externalId     String?
+  userId         String
+  conversationId String
+  role           MessageRole
+  content        String
+  createdAt      DateTime     @default(now())
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([conversationId, createdAt])
+  @@index([externalId])
+}
+
+model Task {
+  id          String       @id @default(cuid())
+  userId      String
+  title       String
+  description String?
+  status      TaskStatus   @default(open)
+  priority    TaskPriority @default(medium)
+  dueDate     DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  completedAt DateTime?
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([userId, dueDate])
+}
+
+model Reminder {
+  id              String         @id @default(cuid())
+  userId          String
+  title           String
+  description     String?
+  remindAt        DateTime
+  timezone        String
+  recurrenceRule  String?
+  status          ReminderStatus @default(scheduled)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  completedAt     DateTime?
+  cancelledAt     DateTime?
+  lastTriggeredAt DateTime?
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([status, remindAt])
+}
+
+model CalendarEvent {
+  id                 String              @id @default(cuid())
+  userId             String
+  provider           CalendarProvider    @default(local)
+  providerEventId    String?
+  title              String
+  description        String?
+  startTime          DateTime
+  endTime            DateTime
+  timezone           String
+  location           String?
+  participantsJson   String?
+  status             CalendarEventStatus @default(confirmed)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, startTime])
+  @@index([provider, providerEventId])
+}
+
+model Memory {
+  id        String   @id @default(cuid())
+  userId    String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model AgentExecution {
+  id              String                 @id @default(cuid())
+  messageId       String?
+  userId          String
+  input           String
+  selectedTool    String?
+  toolInputJson   String?
+  executionStatus AgentExecutionStatus
+  error           String?
+  durationMs      Int
+  createdAt       DateTime               @default(now())
+  user            User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([messageId])
+}
+
+enum MessageRole {
+  user
+  assistant
+  system
+  tool
+}
+
+enum TaskStatus {
+  open
+  in_progress
+  completed
+  cancelled
+}
+
+enum TaskPriority {
+  low
+  medium
+  high
+}
+
+enum ReminderStatus {
+  scheduled
+  completed
+  cancelled
+}
+
+enum CalendarProvider {
+  local
+  google
+}
+
+enum CalendarEventStatus {
+  confirmed
+  cancelled
+}
+
+enum AgentExecutionStatus {
+  success
+  failed
+}
