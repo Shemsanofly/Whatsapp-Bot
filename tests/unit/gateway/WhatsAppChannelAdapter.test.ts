@@ -1,6 +1,7 @@
 import { WhatsAppChannelAdapter } from '../../../src/gateway/WhatsAppChannelAdapter.js';
 import { WhatsAppAuthorizer } from '../../../src/security/WhatsAppAuthorizer.js';
 import type { ChannelMessage } from '../../../src/gateway/types.js';
+import { vi } from 'vitest';
 import type { IncomingWhatsAppMessage, WhatsAppHealth } from '../../../src/whatsapp/types.js';
 
 class FakeWhatsAppConnection {
@@ -520,5 +521,156 @@ describe('WhatsAppChannelAdapter', () => {
     expect(connection.sent).toEqual([
       { to: '255700000000@s.whatsapp.net', text: expect.stringContaining('faster than I can answer') }
     ]);
+  });
+
+  describe('voice notes', () => {
+    function voiceNote(overrides: Partial<IncomingWhatsAppMessage> = {}, seconds = 5) {
+      const download = vi.fn(async () => Buffer.from('voice'));
+      const message: IncomingWhatsAppMessage = {
+        id: 'voice-1',
+        from: '255700000000@s.whatsapp.net',
+        pushName: 'Voice User',
+        fromMe: false,
+        timestamp: new Date(),
+        text: '',
+        isVoiceNote: true,
+        audio: { mimeType: 'audio/ogg', seconds, download },
+        ...overrides
+      };
+      return { message, download };
+    }
+
+    function createVoiceAdapter(options: {
+      transcribe?: (audio: Buffer, mimeType: string) => Promise<string>;
+      withoutTranscriber?: boolean;
+      replyToAll?: boolean;
+      voiceNoteMaxSeconds?: number;
+      publicRateLimitPerMinute?: number;
+    } = {}) {
+      const connection = new FakeWhatsAppConnection();
+      const archived: Array<{ externalId?: string; text: string }> = [];
+      const transcribe = vi.fn(options.transcribe ?? (async () => 'Nikumbushe kesho saa tatu'));
+      const adapter = new WhatsAppChannelAdapter({
+        connection,
+        authorizer: new WhatsAppAuthorizer(['255712345678']),
+        archive: { recordMessage: async (input) => { archived.push(input); } },
+        transcriber: options.withoutTranscriber ? undefined : { transcribe },
+        options: {
+          replyToAll: options.replyToAll ?? true,
+          groupReplyMode: 'mention',
+          voiceNoteMaxSeconds: options.voiceNoteMaxSeconds ?? 120,
+          publicRateLimitPerMinute: options.publicRateLimitPerMinute
+        }
+      });
+      const emitted: ChannelMessage[] = [];
+      adapter.onMessage(async (message) => { emitted.push(message); });
+      return { connection, archived, transcribe, emitted };
+    }
+
+    it('transcribes direct voice notes and sends the transcript to the agent', async () => {
+      const { connection, archived, transcribe, emitted } = createVoiceAdapter();
+
+      await connection.handler?.(voiceNote().message);
+
+      expect(transcribe).toHaveBeenCalledWith(Buffer.from('voice'), 'audio/ogg');
+      expect(emitted).toEqual([
+        expect.objectContaining({
+          senderId: '255700000000',
+          accessLevel: 'public',
+          isVoiceNote: true,
+          text: 'Nikumbushe kesho saa tatu',
+          raw: expect.objectContaining({ text: 'Nikumbushe kesho saa tatu' })
+        })
+      ]);
+      expect(archived.map((entry) => [entry.externalId, entry.text])).toEqual([
+        ['voice-1', '[Voice note]'],
+        ['voice-1', '[Voice note] Nikumbushe kesho saa tatu']
+      ]);
+    });
+
+    it('does not download voice notes it would not answer', async () => {
+      const privateBot = createVoiceAdapter({ replyToAll: false });
+      const group = createVoiceAdapter();
+      const stranger = voiceNote();
+      const backlog = voiceNote({ isBacklog: true });
+      const groupChatter = voiceNote({ from: '120363000000000000@g.us', participant: '16033834344469@lid' });
+
+      await privateBot.connection.handler?.(stranger.message);
+      await privateBot.connection.handler?.(backlog.message);
+      await group.connection.handler?.(groupChatter.message);
+
+      expect(stranger.download).not.toHaveBeenCalled();
+      expect(backlog.download).not.toHaveBeenCalled();
+      expect(groupChatter.download).not.toHaveBeenCalled();
+      expect(privateBot.archived).toHaveLength(2);
+      expect(group.emitted).toEqual([]);
+      expect(group.connection.sent).toEqual([]);
+    });
+
+    it('answers group voice notes that reply to the agent', async () => {
+      const { connection, emitted } = createVoiceAdapter();
+
+      await connection.handler?.(voiceNote({
+        from: '120363000000000000@g.us',
+        participant: '16033834344469@lid',
+        participantPn: '255700000000@s.whatsapp.net',
+        quotedParticipant: '255799999999@s.whatsapp.net'
+      }).message);
+
+      expect(emitted).toEqual([expect.objectContaining({ isGroup: true, isVoiceNote: true, text: 'Nikumbushe kesho saa tatu' })]);
+    });
+
+    it('refuses voice notes over the length limit without downloading them', async () => {
+      const { connection, transcribe, emitted } = createVoiceAdapter({ voiceNoteMaxSeconds: 60 });
+      const { message, download } = voiceNote({}, 300);
+
+      await connection.handler?.(message);
+
+      expect(download).not.toHaveBeenCalled();
+      expect(transcribe).not.toHaveBeenCalled();
+      expect(emitted).toEqual([]);
+      expect(connection.sent).toEqual([
+        { to: '255700000000@s.whatsapp.net', text: expect.stringContaining('under 1 minute') }
+      ]);
+    });
+
+    it('tells the sender when a voice note cannot be understood', async () => {
+      const failing = createVoiceAdapter({ transcribe: async () => { throw new Error('API down'); } });
+      const silent = createVoiceAdapter({ transcribe: async () => '   ' });
+
+      await failing.connection.handler?.(voiceNote().message);
+      await silent.connection.handler?.(voiceNote().message);
+
+      for (const adapter of [failing, silent]) {
+        expect(adapter.emitted).toEqual([]);
+        expect(adapter.connection.sent).toEqual([
+          { to: '255700000000@s.whatsapp.net', text: expect.stringContaining("couldn't understand that voice note") }
+        ]);
+      }
+    });
+
+    it('explains that voice notes are unavailable when no transcriber is configured', async () => {
+      const { connection, emitted } = createVoiceAdapter({ withoutTranscriber: true });
+
+      await connection.handler?.(voiceNote().message);
+
+      expect(emitted).toEqual([]);
+      expect(connection.sent).toEqual([
+        { to: '255700000000@s.whatsapp.net', text: expect.stringContaining("can't listen to voice notes") }
+      ]);
+    });
+
+    it('applies the rate limit before downloading voice notes', async () => {
+      const { connection, emitted } = createVoiceAdapter({ publicRateLimitPerMinute: 1 });
+      const first = voiceNote({ id: 'v1' });
+      const second = voiceNote({ id: 'v2' });
+
+      await connection.handler?.(first.message);
+      await connection.handler?.(second.message);
+
+      expect(first.download).toHaveBeenCalledTimes(1);
+      expect(second.download).not.toHaveBeenCalled();
+      expect(emitted).toHaveLength(1);
+    });
   });
 });

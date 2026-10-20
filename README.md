@@ -141,6 +141,17 @@ Hawa can also answer members of WhatsApp groups that the agent number belongs to
 
 Group replies quote the member's message so everyone can see who the answer is for, and owner-only tools are never available inside a group, even to the owner, because the whole group would see the reply.
 
+### Voice notes
+
+Hawa listens to voice notes (and forwarded audio files) and replies in text, the same way it answers typed messages. Swahili, English, and mixed speech are supported.
+
+- With `AI_PROVIDER=openai`, audio is transcribed with `AI_TRANSCRIPTION_MODEL` (default `whisper-1`). With `AI_PROVIDER=gemini`, Gemini transcribes the audio directly.
+- Audio is only downloaded and transcribed when Hawa would answer the sender: direct chats it replies to, or group voice notes that reply to one of Hawa's messages (or any group voice note in `all` mode). Rate limits apply before transcription.
+- Voice notes longer than `WHATSAPP_VOICE_NOTE_MAX_SECONDS` (default 120; `0` disables) are refused with a short message instead of being transcribed.
+- If transcription fails or hears no speech, Hawa asks the sender to try again or type the message.
+- Archived voice notes are stored as `[Voice note] <transcript>`, so they show up in inbox summaries. Voice notes Hawa did not answer are stored as `[Voice note]`.
+- Set `WHATSAPP_VOICE_NOTES=false` to turn transcription off; Hawa will then ask voice-note senders to type instead.
+
 ### Reliability and abuse protection
 
 - Hawa marks incoming messages as read and shows "typing…" while it works on an answer.

@@ -54,6 +54,7 @@ export class AgentOrchestrator {
           context: {
             senderName: message.senderName,
             isGroup: message.isGroup,
+            isVoiceNote: message.isVoiceNote,
             accessLevel
           }
         });

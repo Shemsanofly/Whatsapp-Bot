@@ -1,4 +1,4 @@
-import OpenAI from 'openai';
+import OpenAI, { toFile } from 'openai';
 import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources/chat/completions';
 import type { LLMDecision, LLMProvider, ToolDefinition } from '../agent/types.js';
 import { buildSummarizationPrompt, buildSystemPrompt } from './prompts.js';
@@ -9,6 +9,7 @@ export class OpenAIProvider implements LLMProvider {
   constructor(private readonly options: {
     apiKey?: string;
     model: string;
+    transcriptionModel?: string;
     timeoutMs?: number;
   }) {
     this.client = new OpenAI({
@@ -45,6 +46,18 @@ export class OpenAIProvider implements LLMProvider {
     };
   }
 
+  async transcribe(audio: Buffer, mimeType: string): Promise<string> {
+    if (!this.options.apiKey) {
+      throw new Error('AI provider is not configured');
+    }
+    const extension = AUDIO_EXTENSIONS[mimeType] ?? 'ogg';
+    const response = await this.client.audio.transcriptions.create({
+      model: this.options.transcriptionModel ?? 'whisper-1',
+      file: await toFile(audio, `voice-note.${extension}`, { type: mimeType })
+    });
+    return response.text.trim();
+  }
+
   async summarize(text: string, mode = 'summary'): Promise<string> {
     if (!this.options.apiKey) {
       throw new Error('AI provider is not configured');
@@ -63,6 +76,15 @@ export class OpenAIProvider implements LLMProvider {
     return response.choices[0]?.message?.content || 'I could not summarize that content.';
   }
 }
+
+const AUDIO_EXTENSIONS: Record<string, string> = {
+  'audio/ogg': 'ogg',
+  'audio/mpeg': 'mp3',
+  'audio/mp4': 'm4a',
+  'audio/aac': 'm4a',
+  'audio/wav': 'wav',
+  'audio/webm': 'webm'
+};
 
 function buildMessages(text: string, systemPrompt: string, recentMessages: Parameters<LLMProvider['decide']>[0]['recentMessages']): ChatCompletionMessageParam[] {
   return [

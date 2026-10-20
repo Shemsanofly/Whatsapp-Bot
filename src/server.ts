@@ -41,7 +41,8 @@ const llm = env.AI_PROVIDER.toLowerCase() === 'gemini'
   })
   : new OpenAIProvider({
     apiKey: env.AI_API_KEY,
-    model: env.AI_MODEL
+    model: env.AI_MODEL,
+    transcriptionModel: env.AI_TRANSCRIPTION_MODEL
   });
 
 const taskService = new TaskService(new PrismaTaskRepository(prisma));
@@ -127,6 +128,7 @@ async function startGatewayRuntime(): Promise<void> {
     connection: connectionManager,
     authorizer: new WhatsAppAuthorizer(env.allowedWhatsAppNumbers),
     archive: chatArchiveService,
+    transcriber: llm,
     options: {
       replyToAll: env.WHATSAPP_REPLY_TO_ALL,
       processFromMeCommands: env.WHATSAPP_PROCESS_FROM_ME_COMMANDS,
@@ -134,7 +136,9 @@ async function startGatewayRuntime(): Promise<void> {
       ownerWhatsAppNumber: env.allowedWhatsAppNumbers[0] ?? env.AGENT_WHATSAPP_NUMBER,
       groupReplyMode: env.WHATSAPP_GROUP_REPLY_MODE,
       groupCommandPrefix: env.WHATSAPP_GROUP_COMMAND_PREFIX,
-      publicRateLimitPerMinute: env.WHATSAPP_PUBLIC_RATE_LIMIT_PER_MINUTE
+      publicRateLimitPerMinute: env.WHATSAPP_PUBLIC_RATE_LIMIT_PER_MINUTE,
+      voiceNotes: env.WHATSAPP_VOICE_NOTES,
+      voiceNoteMaxSeconds: env.WHATSAPP_VOICE_NOTE_MAX_SECONDS
     }
   });
   const scheduler = new ReminderScheduler({
@@ -151,7 +155,8 @@ async function startGatewayRuntime(): Promise<void> {
         text: message.text,
         accessLevel: message.accessLevel,
         senderName: message.senderDisplayName,
-        isGroup: message.isGroup
+        isGroup: message.isGroup,
+        isVoiceNote: message.isVoiceNote
       })
     }
   });

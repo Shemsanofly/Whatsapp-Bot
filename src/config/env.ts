@@ -21,6 +21,7 @@ const envSchema = z.object({
   AI_PROVIDER: z.string().default('openai'),
   AI_API_KEY: z.string().optional(),
   AI_MODEL: z.string().default('gpt-4o-mini'),
+  AI_TRANSCRIPTION_MODEL: z.string().default('whisper-1'),
   GEMINI_API_KEY: z.string().optional(),
   GEMINI_MODEL: z.string().default('gemini-3.1-flash-lite'),
   GEMINI_FALLBACK_MODELS: z.string().default('gemini-3.5-flash-lite,gemini-3.5-flash'),
@@ -37,6 +38,8 @@ const envSchema = z.object({
   WHATSAPP_GROUP_COMMAND_PREFIX: z.string().default('/hawa'),
   WHATSAPP_MAX_MESSAGE_AGE_SECONDS: z.coerce.number().int().nonnegative().default(300),
   WHATSAPP_PUBLIC_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().nonnegative().default(10),
+  WHATSAPP_VOICE_NOTES: booleanFromEnv(true),
+  WHATSAPP_VOICE_NOTE_MAX_SECONDS: z.coerce.number().int().nonnegative().default(120),
   TIMEZONE: z.string().default('Africa/Dar_es_Salaam'),
   GOOGLE_CALENDAR_CREDENTIALS: z.string().optional(),
   GOOGLE_CALENDAR_ID: z.string().default('primary')
