@@ -7,6 +7,7 @@ import { ToolRegistry } from './agent/ToolRegistry.js';
 import { AgentOrchestrator } from './agent/AgentOrchestrator.js';
 import { OpenAIProvider } from './llm/OpenAIProvider.js';
 import { GeminiProvider } from './llm/GeminiProvider.js';
+import { OpenRouterProvider } from './llm/OpenRouterProvider.js';
 import { WhatsAppAuthorizer } from './security/WhatsAppAuthorizer.js';
 import { TaskService } from './tools/tasks/TaskService.js';
 import { TaskTool } from './tools/tasks/TaskTool.js';
@@ -33,17 +34,33 @@ import type { ChannelMessage, GatewayHealth } from './gateway/types.js';
 import { logger } from './utils/logger.js';
 import type { WhatsAppHealth } from './whatsapp/types.js';
 
-const llm = env.AI_PROVIDER.toLowerCase() === 'gemini'
-  ? new GeminiProvider({
-    apiKey: env.GEMINI_API_KEY,
-    model: env.GEMINI_MODEL,
-    fallbackModels: env.geminiFallbackModels
-  })
-  : new OpenAIProvider({
+const llm = createLLMProvider(env.AI_PROVIDER.toLowerCase());
+logger.info({ provider: env.AI_PROVIDER.toLowerCase() }, 'Using AI provider');
+
+function createLLMProvider(provider: string) {
+  if (provider === 'gemini') {
+    return new GeminiProvider({
+      apiKey: env.GEMINI_API_KEY,
+      model: env.GEMINI_MODEL,
+      fallbackModels: env.geminiFallbackModels
+    });
+  }
+  if (provider === 'openrouter') {
+    return new OpenRouterProvider({
+      // Accept AI_API_KEY too, so switching providers only needs AI_PROVIDER changed.
+      apiKey: env.OPENROUTER_API_KEY || env.AI_API_KEY,
+      model: env.OPENROUTER_MODEL,
+      fallbackModels: env.openRouterFallbackModels,
+      transcriptionModel: env.OPENROUTER_TRANSCRIPTION_MODEL,
+      siteUrl: env.OPENROUTER_SITE_URL
+    });
+  }
+  return new OpenAIProvider({
     apiKey: env.AI_API_KEY,
     model: env.AI_MODEL,
     transcriptionModel: env.AI_TRANSCRIPTION_MODEL
   });
+}
 
 const taskService = new TaskService(new PrismaTaskRepository(prisma));
 const reminderService = new ReminderService(new PrismaReminderRepository(prisma));

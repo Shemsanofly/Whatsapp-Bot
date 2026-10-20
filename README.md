@@ -43,6 +43,19 @@ AI_API_KEY=...
 AI_MODEL=gpt-4o-mini
 ```
 
+To use [OpenRouter](https://openrouter.ai) instead (one API key for models from OpenAI, Anthropic, Google, Meta, DeepSeek, and others):
+
+```env
+AI_PROVIDER=openrouter
+OPENROUTER_API_KEY=sk-or-...
+OPENROUTER_MODEL=openai/gpt-4o-mini
+```
+
+- Pick any model id from [openrouter.ai/models](https://openrouter.ai/models). It must support tool calling, otherwise Hawa cannot use tasks, reminders, calendar, or memory. A stronger model gives better answers but costs more per message.
+- `OPENROUTER_FALLBACK_MODELS` (optional, comma-separated) lists models OpenRouter tries in order if the main model is down or rate limited.
+- Voice notes are transcribed through OpenRouter with `OPENROUTER_TRANSCRIPTION_MODEL` (default `openai/whisper-1`).
+- `AI_API_KEY` is used if `OPENROUTER_API_KEY` is empty.
+
 To use Gemini instead:
 
 ```env
@@ -145,7 +158,7 @@ Group replies quote the member's message so everyone can see who the answer is f
 
 Hawa listens to voice notes (and forwarded audio files) and replies in text, the same way it answers typed messages. Swahili, English, and mixed speech are supported.
 
-- With `AI_PROVIDER=openai`, audio is transcribed with `AI_TRANSCRIPTION_MODEL` (default `whisper-1`). With `AI_PROVIDER=gemini`, Gemini transcribes the audio directly.
+- With `AI_PROVIDER=openai`, audio is transcribed with `AI_TRANSCRIPTION_MODEL` (default `whisper-1`). With `AI_PROVIDER=openrouter`, it uses `OPENROUTER_TRANSCRIPTION_MODEL` (default `openai/whisper-1`). With `AI_PROVIDER=gemini`, Gemini transcribes the audio directly.
 - Audio is only downloaded and transcribed when Hawa would answer the sender: direct chats it replies to, or group voice notes that reply to one of Hawa's messages (or any group voice note in `all` mode). Rate limits apply before transcription.
 - Voice notes longer than `WHATSAPP_VOICE_NOTE_MAX_SECONDS` (default 120; `0` disables) are refused with a short message instead of being transcribed.
 - If transcription fails or hears no speech, Hawa asks the sender to try again or type the message.

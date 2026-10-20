@@ -25,6 +25,11 @@ const envSchema = z.object({
   GEMINI_API_KEY: z.string().optional(),
   GEMINI_MODEL: z.string().default('gemini-3.1-flash-lite'),
   GEMINI_FALLBACK_MODELS: z.string().default('gemini-3.5-flash-lite,gemini-3.5-flash'),
+  OPENROUTER_API_KEY: z.string().optional(),
+  OPENROUTER_MODEL: z.string().default('openai/gpt-4o-mini'),
+  OPENROUTER_FALLBACK_MODELS: z.string().default(''),
+  OPENROUTER_TRANSCRIPTION_MODEL: z.string().default('openai/whisper-1'),
+  OPENROUTER_SITE_URL: z.string().optional(),
   DATABASE_URL: z.string().default('file:./dev.db'),
   PORT: z.coerce.number().default(3000),
   NODE_ENV: z.string().default('development'),
@@ -51,6 +56,9 @@ process.env.DATABASE_URL = parsed.DATABASE_URL;
 export const env = {
   ...parsed,
   geminiFallbackModels: parsed.GEMINI_FALLBACK_MODELS.split(',')
+    .map((value) => value.trim())
+    .filter(Boolean),
+  openRouterFallbackModels: parsed.OPENROUTER_FALLBACK_MODELS.split(',')
     .map((value) => value.trim())
     .filter(Boolean),
   allowedWhatsAppNumbers: parsed.ALLOWED_WHATSAPP_NUMBERS.split(',')
