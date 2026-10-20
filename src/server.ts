@@ -119,7 +119,9 @@ async function startGatewayRuntime(): Promise<void> {
     import('./services/scheduler/ReminderScheduler.js')
   ]);
 
-  const connectionManager = new WhatsAppConnectionManager(env.WHATSAPP_AUTH_DIR);
+  const connectionManager = new WhatsAppConnectionManager(env.WHATSAPP_AUTH_DIR, {
+    maxMessageAgeSeconds: env.WHATSAPP_MAX_MESSAGE_AGE_SECONDS
+  });
   tools.register(new WhatsAppOutboundMessageTool(connectionManager, chatArchiveService));
   const whatsappChannel = new WhatsAppChannelAdapter({
     connection: connectionManager,
@@ -129,7 +131,10 @@ async function startGatewayRuntime(): Promise<void> {
       replyToAll: env.WHATSAPP_REPLY_TO_ALL,
       processFromMeCommands: env.WHATSAPP_PROCESS_FROM_ME_COMMANDS,
       fromMeCommandPrefix: env.WHATSAPP_FROM_ME_COMMAND_PREFIX,
-      ownerWhatsAppNumber: env.allowedWhatsAppNumbers[0] ?? env.AGENT_WHATSAPP_NUMBER
+      ownerWhatsAppNumber: env.allowedWhatsAppNumbers[0] ?? env.AGENT_WHATSAPP_NUMBER,
+      groupReplyMode: env.WHATSAPP_GROUP_REPLY_MODE,
+      groupCommandPrefix: env.WHATSAPP_GROUP_COMMAND_PREFIX,
+      publicRateLimitPerMinute: env.WHATSAPP_PUBLIC_RATE_LIMIT_PER_MINUTE
     }
   });
   const scheduler = new ReminderScheduler({
@@ -144,7 +149,9 @@ async function startGatewayRuntime(): Promise<void> {
         whatsappNumber: message.senderId,
         messageId: message.messageId,
         text: message.text,
-        accessLevel: message.accessLevel
+        accessLevel: message.accessLevel,
+        senderName: message.senderDisplayName,
+        isGroup: message.isGroup
       })
     }
   });

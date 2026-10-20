@@ -154,4 +154,40 @@ describe('GatewayRuntime', () => {
       { id: 'telegram', name: 'Telegram', enabled: false, health: { connected: false, authenticated: false } }
     ]);
   });
+
+  it('shows typing while the agent works and replies through sendReply when the channel supports it', async () => {
+    const events: string[] = [];
+    const channel = new FakeChannel('whatsapp', 'WhatsApp');
+    Object.assign(channel, {
+      setTyping: async (_message: ChannelMessage, typing: boolean) => {
+        events.push(typing ? 'typing:on' : 'typing:off');
+      },
+      sendReply: async (message: ChannelMessage, text: string) => {
+        events.push(`reply:${message.messageId}:${text}`);
+      }
+    });
+    const agent: GatewayAgentPort = {
+      handleMessage: async () => {
+        events.push('agent');
+        return 'answer';
+      }
+    };
+    const gateway = new GatewayRuntime({ channels: [channel], agent });
+
+    await gateway.start();
+    await channel.handler?.({
+      channel: 'whatsapp',
+      messageId: 'message-typing',
+      conversationId: '120363000000000000@g.us',
+      senderId: '255700000000',
+      text: 'question',
+      fromSelf: false,
+      isGroup: true,
+      timestamp: new Date('2026-08-29T12:00:00.000Z')
+    });
+
+    expect(events).toEqual(['typing:on', 'agent', 'reply:message-typing:answer', 'typing:off']);
+    expect(channel.sent).toEqual([]);
+  });
 });
+

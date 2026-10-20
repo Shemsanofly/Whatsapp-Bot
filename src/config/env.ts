@@ -3,6 +3,20 @@ import { z } from 'zod';
 
 dotenv.config();
 
+// z.coerce.boolean() treats any non-empty string (including "false") as true.
+const booleanFromEnv = (defaultValue: boolean) => z
+  .union([z.boolean(), z.string()])
+  .optional()
+  .transform((value) => {
+    if (value === undefined || value === '') {
+      return defaultValue;
+    }
+    if (typeof value === 'boolean') {
+      return value;
+    }
+    return ['true', '1', 'yes', 'on'].includes(value.trim().toLowerCase());
+  });
+
 const envSchema = z.object({
   AI_PROVIDER: z.string().default('openai'),
   AI_API_KEY: z.string().optional(),
@@ -16,9 +30,13 @@ const envSchema = z.object({
   WHATSAPP_AUTH_DIR: z.string().default('.whatsapp-auth'),
   AGENT_WHATSAPP_NUMBER: z.string().default(''),
   ALLOWED_WHATSAPP_NUMBERS: z.string().default(''),
-  WHATSAPP_REPLY_TO_ALL: z.coerce.boolean().default(true),
-  WHATSAPP_PROCESS_FROM_ME_COMMANDS: z.coerce.boolean().default(false),
+  WHATSAPP_REPLY_TO_ALL: booleanFromEnv(true),
+  WHATSAPP_PROCESS_FROM_ME_COMMANDS: booleanFromEnv(false),
   WHATSAPP_FROM_ME_COMMAND_PREFIX: z.string().default('/agent'),
+  WHATSAPP_GROUP_REPLY_MODE: z.enum(['off', 'mention', 'all']).default('mention'),
+  WHATSAPP_GROUP_COMMAND_PREFIX: z.string().default('/hawa'),
+  WHATSAPP_MAX_MESSAGE_AGE_SECONDS: z.coerce.number().int().nonnegative().default(300),
+  WHATSAPP_PUBLIC_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().nonnegative().default(10),
   TIMEZONE: z.string().default('Africa/Dar_es_Salaam'),
   GOOGLE_CALENDAR_CREDENTIALS: z.string().optional(),
   GOOGLE_CALENDAR_ID: z.string().default('primary')

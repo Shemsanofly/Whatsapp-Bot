@@ -6,7 +6,7 @@ import makeWASocket, {
   type WASocket
 } from '@whiskeysockets/baileys';
 import qrcode from 'qrcode-terminal';
-import type { IncomingWhatsAppContact, IncomingWhatsAppMessage, WhatsAppHealth, WhatsAppSender } from './types.js';
+import type { IncomingWhatsAppContact, IncomingWhatsAppMessage, WhatsAppHealth, WhatsAppSender, WhatsAppSendOptions } from './types.js';
 import { logger } from '../utils/logger.js';
 import { normalizeWhatsAppNumber } from '../security/WhatsAppAuthorizer.js';
 
@@ -25,8 +25,12 @@ export class WhatsAppConnectionManager implements WhatsAppSender {
   private incomingMessageCallback?: IncomingMessageCallback;
   private incomingContactCallback?: IncomingContactCallback;
   private currentUserPhone?: string;
+  private currentUserLid?: string;
 
-  constructor(private readonly authDir: string) {}
+  constructor(
+    private readonly authDir: string,
+    private readonly options: { maxMessageAgeSeconds?: number } = {}
+  ) {}
 
   onMessage(callback: IncomingMessageCallback): void {
     this.incomingMessageCallback = callback;
@@ -60,6 +64,7 @@ export class WhatsAppConnectionManager implements WhatsAppSender {
         this.authenticated = true;
         this.reconnecting = false;
         this.currentUserPhone = normalizeWhatsAppNumber(socket.user?.id ?? '');
+        this.currentUserLid = normalizeWhatsAppNumber((socket.user as { lid?: string } | undefined)?.lid ?? '') || undefined;
       }
       if (update.connection === 'close') {
         this.connected = false;
@@ -100,11 +105,30 @@ export class WhatsAppConnectionManager implements WhatsAppSender {
     });
   }
 
-  async sendText(to: string, text: string): Promise<void> {
+  async sendText(to: string, text: string, options: WhatsAppSendOptions = {}): Promise<void> {
     if (!this.socket) {
       throw new Error('WhatsApp is not connected');
     }
-    await this.socket.sendMessage(to, { text });
+    const quoted = options.quoted ? toQuotedMessage(options.quoted) : undefined;
+    await this.socket.sendMessage(to, { text }, quoted ? { quoted } : undefined);
+  }
+
+  async markRead(message: IncomingWhatsAppMessage): Promise<void> {
+    await this.socket?.readMessages([{
+      remoteJid: message.from,
+      id: message.id,
+      participant: message.participant,
+      fromMe: message.fromMe
+    }]);
+  }
+
+  async sendTyping(to: string, typing: boolean): Promise<void> {
+    await this.socket?.sendPresenceUpdate(typing ? 'composing' : 'paused', to);
+  }
+
+  /** Normalized identifiers (phone number and lid) of the connected agent account. */
+  getSelfIds(): string[] {
+    return [this.currentUserPhone, this.currentUserLid].filter((value): value is string => Boolean(value));
   }
 
   getHealth(): WhatsAppHealth {
@@ -150,10 +174,20 @@ export class WhatsAppConnectionManager implements WhatsAppSender {
     if (!key.remoteJid || !message.message) {
       return undefined;
     }
-    const text = message.message.conversation ?? message.message.extendedTextMessage?.text;
+    const content = unwrapMessageContent(message.message);
+    const text = content.conversation
+      ?? content.extendedTextMessage?.text
+      ?? content.imageMessage?.caption
+      ?? content.videoMessage?.caption
+      ?? content.documentMessage?.caption;
     if (!text) {
       return undefined;
     }
+    const timestamp = toDate(message.messageTimestamp);
+    const contextInfo = content.extendedTextMessage?.contextInfo
+      ?? content.imageMessage?.contextInfo
+      ?? content.videoMessage?.contextInfo
+      ?? content.documentMessage?.contextInfo;
 
     return {
       id: key.id ?? crypto.randomUUID(),
@@ -163,9 +197,17 @@ export class WhatsAppConnectionManager implements WhatsAppSender {
       participantPn: key.participantPn ?? undefined,
       pushName: message.pushName ?? undefined,
       fromMe: key.fromMe ?? false,
-      timestamp: toDate(message.messageTimestamp),
-      text
+      timestamp,
+      text,
+      mentionedJids: contextInfo?.mentionedJid?.length ? contextInfo.mentionedJid : undefined,
+      quotedParticipant: contextInfo?.participant ?? undefined,
+      isBacklog: this.isBacklog(timestamp) || undefined
     };
+  }
+
+  private isBacklog(timestamp: Date): boolean {
+    const maxAgeSeconds = this.options.maxMessageAgeSeconds ?? 0;
+    return maxAgeSeconds > 0 && Date.now() - timestamp.getTime() > maxAgeSeconds * 1000;
   }
 
   private async dispatchIncomingMessage(message: IncomingWhatsAppMessage): Promise<void> {
@@ -194,6 +236,26 @@ export class WhatsAppConnectionManager implements WhatsAppSender {
       displayName
     });
   }
+}
+
+function unwrapMessageContent(message: proto.IMessage): proto.IMessage {
+  const inner = message.ephemeralMessage?.message
+    ?? message.viewOnceMessage?.message
+    ?? message.viewOnceMessageV2?.message
+    ?? message.documentWithCaptionMessage?.message;
+  return inner ? unwrapMessageContent(inner) : message;
+}
+
+function toQuotedMessage(message: IncomingWhatsAppMessage): proto.IWebMessageInfo {
+  return {
+    key: {
+      remoteJid: message.from,
+      id: message.id,
+      fromMe: message.fromMe,
+      participant: message.participant
+    },
+    message: { conversation: message.text }
+  };
 }
 
 function shouldIgnoreJid(jid: string): boolean {
