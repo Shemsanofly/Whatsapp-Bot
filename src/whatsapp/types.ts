@@ -8,6 +8,14 @@ export interface IncomingWhatsAppMessage {
   fromMe: boolean;
   timestamp: Date;
   text: string;
+  mentionedJids?: string[];
+  quotedParticipant?: string;
+  /** Old message delivered on (re)connect: archive it, but do not reply. */
+  isBacklog?: boolean;
+}
+
+export interface WhatsAppSendOptions {
+  quoted?: IncomingWhatsAppMessage;
 }
 
 export interface IncomingWhatsAppContact {
@@ -21,7 +29,7 @@ export interface WhatsAppHealth {
 }
 
 export interface WhatsAppSender {
-  sendText(to: string, text: string): Promise<void>;
+  sendText(to: string, text: string, options?: WhatsAppSendOptions): Promise<void>;
 }
 
 export interface AgentOrchestratorPort {
@@ -30,5 +38,7 @@ export interface AgentOrchestratorPort {
     messageId?: string;
     text: string;
     accessLevel?: 'owner' | 'public';
+    senderName?: string;
+    isGroup?: boolean;
   }): Promise<string>;
 }

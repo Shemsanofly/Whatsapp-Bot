@@ -103,12 +103,29 @@ export class GatewayRuntime {
   }
 
   private async processChannelMessage(channel: ChannelAdapter, message: ChannelMessage): Promise<void> {
+    await this.setTyping(channel, message, true);
     try {
       const response = await this.deps.agent.handleMessage(message);
-      await channel.sendText(message.conversationId, response);
+      await this.reply(channel, message, response);
     } catch (error) {
       logger.error({ error, channel: channel.id }, 'Gateway channel message handling failed');
-      await channel.sendText(message.conversationId, "I'm having trouble processing that request right now. Please try again.");
+      await this.reply(channel, message, "I'm having trouble processing that request right now. Please try again.");
+    } finally {
+      await this.setTyping(channel, message, false);
+    }
+  }
+
+  private reply(channel: ChannelAdapter, message: ChannelMessage, text: string): Promise<void> {
+    return channel.sendReply
+      ? channel.sendReply(message, text)
+      : channel.sendText(message.conversationId, text);
+  }
+
+  private async setTyping(channel: ChannelAdapter, message: ChannelMessage, typing: boolean): Promise<void> {
+    try {
+      await channel.setTyping?.(message, typing);
+    } catch (error) {
+      logger.debug({ error, channel: channel.id }, 'Failed to update typing indicator');
     }
   }
 }

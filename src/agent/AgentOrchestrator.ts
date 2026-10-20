@@ -50,7 +50,12 @@ export class AgentOrchestrator {
           user,
           timezone: user.timezone,
           recentMessages,
-          tools: this.getToolsForAccessLevel(accessLevel)
+          tools: this.getToolsForAccessLevel(accessLevel),
+          context: {
+            senderName: message.senderName,
+            isGroup: message.isGroup,
+            accessLevel
+          }
         });
 
         if (decision.kind === 'final') {

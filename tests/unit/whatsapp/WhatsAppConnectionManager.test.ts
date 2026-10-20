@@ -174,4 +174,91 @@ describe('WhatsAppConnectionManager', () => {
       }
     ]);
   });
+
+  it('reads captions, disappearing messages, mentions, and quoted participants', async () => {
+    const { WhatsAppConnectionManager } = await import('../../../src/whatsapp/WhatsAppConnectionManager.js');
+    const manager = new WhatsAppConnectionManager('.test-auth');
+    const seen: IncomingWhatsAppMessage[] = [];
+    manager.onMessage(async (message) => {
+      seen.push(message);
+    });
+
+    await manager.connect();
+    handlers.get('messages.upsert')?.({
+      type: 'notify',
+      messages: [
+        {
+          key: { id: 'caption', remoteJid: '255700000000@s.whatsapp.net', fromMe: false },
+          message: { imageMessage: { caption: 'what is this?' } },
+          messageTimestamp: Math.floor(Date.now() / 1000)
+        },
+        {
+          key: { id: 'ephemeral', remoteJid: '120363000000000000@g.us', participant: '16033834344469@lid', fromMe: false },
+          message: {
+            ephemeralMessage: {
+              message: {
+                extendedTextMessage: {
+                  text: '@255799999999 habari',
+                  contextInfo: { mentionedJid: ['255799999999@s.whatsapp.net'], participant: '255799999999@s.whatsapp.net' }
+                }
+              }
+            }
+          },
+          messageTimestamp: Math.floor(Date.now() / 1000)
+        }
+      ]
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(seen).toEqual([
+      expect.objectContaining({ id: 'caption', text: 'what is this?', isBacklog: undefined }),
+      expect.objectContaining({
+        id: 'ephemeral',
+        text: '@255799999999 habari',
+        mentionedJids: ['255799999999@s.whatsapp.net'],
+        quotedParticipant: '255799999999@s.whatsapp.net'
+      })
+    ]);
+  });
+
+  it('flags messages older than the max age as backlog', async () => {
+    const { WhatsAppConnectionManager } = await import('../../../src/whatsapp/WhatsAppConnectionManager.js');
+    const manager = new WhatsAppConnectionManager('.test-auth', { maxMessageAgeSeconds: 300 });
+    const seen: IncomingWhatsAppMessage[] = [];
+    manager.onMessage(async (message) => {
+      seen.push(message);
+    });
+
+    await manager.connect();
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    handlers.get('messages.upsert')?.({
+      type: 'notify',
+      messages: [
+        {
+          key: { id: 'old', remoteJid: '255700000000@s.whatsapp.net', fromMe: false },
+          message: { conversation: 'old' },
+          messageTimestamp: nowSeconds - 3600
+        },
+        {
+          key: { id: 'fresh', remoteJid: '255700000000@s.whatsapp.net', fromMe: false },
+          message: { conversation: 'fresh' },
+          messageTimestamp: nowSeconds
+        }
+      ]
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(seen.map((message) => [message.id, message.isBacklog])).toEqual([['old', true], ['fresh', undefined]]);
+  });
+
+  it('exposes the agent phone and lid ids once connected', async () => {
+    const { WhatsAppConnectionManager } = await import('../../../src/whatsapp/WhatsAppConnectionManager.js');
+    const manager = new WhatsAppConnectionManager('.test-auth');
+
+    await manager.connect();
+    await handlers.get('connection.update')?.({ connection: 'open' });
+
+    expect(manager.getSelfIds()).toEqual(['255799999999']);
+  });
 });
+

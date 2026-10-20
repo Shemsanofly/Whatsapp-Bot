@@ -25,7 +25,7 @@ export class OpenAIProvider implements LLMProvider {
 
     const response = await this.client.chat.completions.create({
       model: this.options.model,
-      messages: buildMessages(input.text, input.timezone, input.recentMessages),
+      messages: buildMessages(input.text, buildSystemPrompt(input.timezone, input.context), input.recentMessages),
       tools: input.tools.map(toOpenAITool),
       tool_choice: 'auto',
       temperature: 0.2
@@ -64,11 +64,11 @@ export class OpenAIProvider implements LLMProvider {
   }
 }
 
-function buildMessages(text: string, timezone: string, recentMessages: Parameters<LLMProvider['decide']>[0]['recentMessages']): ChatCompletionMessageParam[] {
+function buildMessages(text: string, systemPrompt: string, recentMessages: Parameters<LLMProvider['decide']>[0]['recentMessages']): ChatCompletionMessageParam[] {
   return [
     {
       role: 'system',
-      content: buildSystemPrompt(timezone)
+      content: systemPrompt
     },
     ...recentMessages.map((message) => {
       if (message.role === 'tool') {

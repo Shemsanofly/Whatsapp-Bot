@@ -1,6 +1,7 @@
-import type { ChannelAdapter, ChannelMessageHandler } from './types.js';
+import type { ChannelAdapter, ChannelMessage, ChannelMessageHandler } from './types.js';
 import { normalizeWhatsAppNumber, WhatsAppAuthorizer } from '../security/WhatsAppAuthorizer.js';
-import type { IncomingWhatsAppContact, IncomingWhatsAppMessage, WhatsAppHealth } from '../whatsapp/types.js';
+import { SenderRateLimiter } from '../security/SenderRateLimiter.js';
+import type { IncomingWhatsAppContact, IncomingWhatsAppMessage, WhatsAppHealth, WhatsAppSendOptions } from '../whatsapp/types.js';
 import { logger } from '../utils/logger.js';
 
 export interface WhatsAppConnectionPort {
@@ -8,8 +9,11 @@ export interface WhatsAppConnectionPort {
   onContact?(callback: (contact: IncomingWhatsAppContact) => Promise<void>): void;
   connect(): Promise<void>;
   shutdown(): Promise<void>;
-  sendText(to: string, text: string): Promise<void>;
+  sendText(to: string, text: string, options?: WhatsAppSendOptions): Promise<void>;
   getHealth(): WhatsAppHealth;
+  getSelfIds?(): string[];
+  markRead?(message: IncomingWhatsAppMessage): Promise<void>;
+  sendTyping?(to: string, typing: boolean): Promise<void>;
 }
 
 export interface WhatsAppMessageArchive {
@@ -34,13 +38,21 @@ export interface WhatsAppChannelOptions {
   processFromMeCommands?: boolean;
   fromMeCommandPrefix?: string;
   ownerWhatsAppNumber?: string;
+  /** off: ignore groups; mention: reply when mentioned, replied to, or prefixed; all: reply to every group message. */
+  groupReplyMode?: 'off' | 'mention' | 'all';
+  groupCommandPrefix?: string;
+  /** Max agent replies per public sender per minute. 0 or undefined disables limiting. */
+  publicRateLimitPerMinute?: number;
 }
+
+const RATE_LIMIT_NOTICE = "You're sending messages faster than I can answer. Please wait a minute and try again.";
 
 export class WhatsAppChannelAdapter implements ChannelAdapter {
   readonly id = 'whatsapp';
   readonly name = 'WhatsApp';
   readonly enabled: boolean;
   private messageHandler?: ChannelMessageHandler;
+  private readonly rateLimiter: SenderRateLimiter;
 
   constructor(private readonly deps: {
     connection: WhatsAppConnectionPort;
@@ -49,6 +61,7 @@ export class WhatsAppChannelAdapter implements ChannelAdapter {
     options?: WhatsAppChannelOptions;
   }) {
     this.enabled = deps.options?.enabled ?? true;
+    this.rateLimiter = new SenderRateLimiter(deps.options?.publicRateLimitPerMinute ?? 0);
     this.deps.connection.onMessage((message) => this.handleIncomingMessage(message));
     this.deps.connection.onContact?.((contact) => this.handleIncomingContact(contact));
   }
@@ -69,6 +82,21 @@ export class WhatsAppChannelAdapter implements ChannelAdapter {
     return this.deps.connection.sendText(target, text);
   }
 
+  sendReply(message: ChannelMessage, text: string): Promise<void> {
+    const raw = message.raw as IncomingWhatsAppMessage | undefined;
+    // Quote the question in groups so members can see who the answer is for.
+    const options = message.isGroup && raw ? { quoted: raw } : undefined;
+    return this.deps.connection.sendText(message.conversationId, text, options);
+  }
+
+  async setTyping(message: ChannelMessage, typing: boolean): Promise<void> {
+    const raw = message.raw as IncomingWhatsAppMessage | undefined;
+    if (typing && raw && !raw.fromMe) {
+      await this.deps.connection.markRead?.(raw);
+    }
+    await this.deps.connection.sendTyping?.(message.conversationId, typing);
+  }
+
   getHealth(): WhatsAppHealth {
     return this.deps.connection.getHealth();
   }
@@ -80,13 +108,16 @@ export class WhatsAppChannelAdapter implements ChannelAdapter {
 
     await this.archiveMessage(message);
 
+    if (message.isBacklog) {
+      logger.info({ from: message.from, messageId: message.id }, 'Not replying to backlog WhatsApp message');
+      return;
+    }
+
+    const isGroup = isGroupJid(message.from);
     const isFromMeCommand = this.isFromMeCommand(message);
-    const isOwnerChat = this.deps.authorizer.isAuthorized([
-      message.from,
-      message.senderPn,
-      message.participantPn,
-      message.participant
-    ]) || isFromMeCommand;
+    const isOwnerChat = this.deps.authorizer.isAuthorized(isGroup
+      ? [message.participantPn, message.participant]
+      : [message.from, message.senderPn, message.participantPn, message.participant]) || isFromMeCommand;
     const isPublicReply = this.isPublicReply(message, isOwnerChat);
     const prefix = this.deps.options?.fromMeCommandPrefix ?? '/agent';
 
@@ -97,6 +128,7 @@ export class WhatsAppChannelAdapter implements ChannelAdapter {
       fromMe: message.fromMe,
       isAuthorizedControlChat: isOwnerChat,
       isPublicReply,
+      isGroup,
       hasFromMeCommandPrefix: message.text.toLowerCase().startsWith(prefix.toLowerCase())
     }, 'Received WhatsApp channel message');
 
@@ -105,24 +137,79 @@ export class WhatsAppChannelAdapter implements ChannelAdapter {
       return;
     }
 
-    const text = this.getAgentText(message);
+    const text = isGroup && !isFromMeCommand ? this.getGroupAgentText(message) : this.getAgentText(message);
     if (!text) {
       logger.info({ from: message.from, fromMe: message.fromMe }, 'Ignoring WhatsApp channel message that is not an agent command');
       return;
     }
 
+    const senderId = this.getOwnerNumber(message, isFromMeCommand);
+    const conversationId = this.getResponseJid(message, isFromMeCommand);
+    if (!isOwnerChat) {
+      const limit = this.rateLimiter.check(senderId);
+      if (limit !== 'allowed') {
+        logger.warn({ from: message.from, senderId }, 'Rate limiting WhatsApp sender');
+        if (limit === 'limited') {
+          await this.sendRateLimitNotice(conversationId, isGroup ? message : undefined);
+        }
+        return;
+      }
+    }
+
     await this.messageHandler?.({
       channel: this.id,
       messageId: message.id,
-      conversationId: this.getResponseJid(message, isFromMeCommand),
-      senderId: this.getOwnerNumber(message, isFromMeCommand),
+      conversationId,
+      senderId,
       senderDisplayName: message.pushName,
-      accessLevel: isOwnerChat ? 'owner' : 'public',
+      // Owner-only tools expose private data, so never enable them where a whole group would see the reply.
+      accessLevel: isOwnerChat && !isGroup ? 'owner' : 'public',
       fromSelf: message.fromMe,
+      isGroup,
       text,
       timestamp: message.timestamp,
       raw: message
     });
+  }
+
+  private async sendRateLimitNotice(conversationId: string, quoted?: IncomingWhatsAppMessage): Promise<void> {
+    try {
+      await this.deps.connection.sendText(conversationId, RATE_LIMIT_NOTICE, quoted ? { quoted } : undefined);
+    } catch (error) {
+      logger.warn({ error }, 'Failed to send WhatsApp rate limit notice');
+    }
+  }
+
+  /**
+   * In groups the agent only answers when addressed (unless mode is 'all'):
+   * an @mention of the agent, a reply to one of its messages, or the group command prefix.
+   */
+  private getGroupAgentText(message: IncomingWhatsAppMessage): string | undefined {
+    if (message.fromMe) {
+      return undefined;
+    }
+
+    const mode = this.deps.options?.groupReplyMode ?? 'off';
+    if (mode === 'off') {
+      return undefined;
+    }
+    const selfIds = new Set(this.deps.connection.getSelfIds?.() ?? []);
+    const isSelf = (jid: string | undefined) => Boolean(jid) && selfIds.has(normalizeWhatsAppNumber(jid ?? ''));
+    const prefix = this.deps.options?.groupCommandPrefix ?? '/hawa';
+    const hasPrefix = prefix.length > 0 && message.text.toLowerCase().startsWith(prefix.toLowerCase());
+    const isMentioned = (message.mentionedJids ?? []).some(isSelf);
+    const isReplyToAgent = isSelf(message.quotedParticipant);
+
+    if (mode !== 'all' && !hasPrefix && !isMentioned && !isReplyToAgent) {
+      return undefined;
+    }
+
+    let text = hasPrefix ? message.text.slice(prefix.length) : message.text;
+    for (const selfId of selfIds) {
+      text = text.replace(new RegExp(`@${selfId}\\b`, 'g'), '');
+    }
+    text = text.replace(/\s+/g, ' ').trim();
+    return text.length > 0 ? text : undefined;
   }
 
   private async archiveMessage(message: IncomingWhatsAppMessage): Promise<void> {
@@ -186,14 +273,21 @@ export class WhatsAppChannelAdapter implements ChannelAdapter {
   }
 
   private isPublicReply(message: IncomingWhatsAppMessage, isOwnerChat: boolean): boolean {
-    return Boolean(this.deps.options?.replyToAll)
-      && !isOwnerChat
-      && !message.fromMe
-      && !isGroupJid(message.from);
+    if (message.fromMe) {
+      return false;
+    }
+    if (isGroupJid(message.from)) {
+      return (this.deps.options?.groupReplyMode ?? 'off') !== 'off';
+    }
+    return Boolean(this.deps.options?.replyToAll) && !isOwnerChat;
   }
 
   private getOwnerNumber(message: IncomingWhatsAppMessage, isFromMeCommand: boolean): string {
     const configuredOwner = isFromMeCommand ? this.deps.options?.ownerWhatsAppNumber : undefined;
+    if (isGroupJid(message.from) && !isFromMeCommand) {
+      // In groups the remote JID is the group; identify the member who wrote.
+      return normalizePreferredWhatsAppNumber([message.participantPn, message.senderPn, message.participant]);
+    }
     return normalizePreferredWhatsAppNumber([
       message.senderPn,
       message.participantPn,

@@ -1,6 +1,6 @@
-import type { LLMProvider } from '../agent/types.js';
+import type { LLMProvider, PromptContext } from '../agent/types.js';
 
-export function buildSystemPrompt(timezone: string): string {
+export function buildSystemPrompt(timezone: string, context: PromptContext = {}): string {
   return [
     'Your name is Hawa, a helpful WhatsApp AI agent.',
     'Understand both Swahili and English, including casual Tanzanian Swahili and mixed Swahili-English messages. Reply in the same language the user used unless they ask for another language.',
@@ -16,8 +16,28 @@ export function buildSystemPrompt(timezone: string): string {
     'Voice calls are not implemented; if the user asks to call someone, explain that you can send a WhatsApp message asking them to call instead.',
     'Do not invent successful tool execution. If required information is missing, ask a concise clarification question.',
     'When reporting saved memories, answer from saved memories and do not invent identity details.',
-    `The user's timezone is ${timezone}. Return tool date-times as ISO 8601 strings.`
+    'You reply inside WhatsApp: keep answers short and conversational, use plain text, and use WhatsApp formatting only (*bold*, _italic_, - lists). Do not use Markdown headings, tables, or **double asterisks**.',
+    `The user's timezone is ${timezone}. Return tool date-times as ISO 8601 strings.`,
+    ...buildContextLines(context)
   ].join('\n');
+}
+
+function buildContextLines(context: PromptContext): string[] {
+  const lines: string[] = [];
+  if (context.senderName) {
+    lines.push(`The person messaging you shows their WhatsApp name as "${sanitizeName(context.senderName)}". You may address them by it, but treat it as unverified.`);
+  }
+  if (context.isGroup) {
+    lines.push('This message was sent in a WhatsApp group where you were addressed. Your reply is visible to every member, so answer the sender directly and never share private information about the owner or other chats.');
+  }
+  if (context.accessLevel === 'public') {
+    lines.push('This sender is a member of the public, not the owner.');
+  }
+  return lines;
+}
+
+function sanitizeName(name: string): string {
+  return name.replace(/["\n\r]/g, ' ').trim().slice(0, 60);
 }
 
 export function buildSummarizationPrompt(mode: string): string {

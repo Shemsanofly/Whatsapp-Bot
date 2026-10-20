@@ -37,7 +37,7 @@ export class GeminiProvider implements LLMProvider {
 
   async decide(input: Parameters<LLMProvider['decide']>[0]): Promise<LLMDecision> {
     const response = await this.generate({
-      systemInstruction: buildSystemPrompt(input.timezone),
+      systemInstruction: buildSystemPrompt(input.timezone, input.context),
       contents: [
         ...toGeminiContents(input.recentMessages),
         { role: 'user', parts: [{ text: input.text }] }

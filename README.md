@@ -131,6 +131,24 @@ By default, `WHATSAPP_REPLY_TO_ALL=true`, so anyone who sends or texts a direct 
 
 Numbers in `ALLOWED_WHATSAPP_NUMBERS` are treated as owners. Owner chats can use owner-only capabilities such as reading the archived WhatsApp inbox and sending outbound WhatsApp messages. Public users can chat with the AI and use normal safe tools, but owner-only WhatsApp tools are not exposed to them.
 
+### Group members
+
+Hawa can also answer members of WhatsApp groups that the agent number belongs to. Group behaviour is controlled by `WHATSAPP_GROUP_REPLY_MODE`:
+
+- `mention` (default): Hawa replies only when a member @mentions the agent number, replies to one of Hawa's messages, or starts the message with `WHATSAPP_GROUP_COMMAND_PREFIX` (default `/hawa`, e.g. `/hawa what is the capital of Kenya?`). Other group chatter is archived but ignored.
+- `all`: Hawa replies to every group message.
+- `off`: Hawa never replies in groups.
+
+Group replies quote the member's message so everyone can see who the answer is for, and owner-only tools are never available inside a group, even to the owner, because the whole group would see the reply.
+
+### Reliability and abuse protection
+
+- Hawa marks incoming messages as read and shows "typing…" while it works on an answer.
+- Messages from the same chat are answered in order, and duplicates are ignored.
+- Messages older than `WHATSAPP_MAX_MESSAGE_AGE_SECONDS` (default 300) are archived but not answered, so reconnecting after downtime does not flood people with late replies. Set `0` to disable.
+- Public senders are limited to `WHATSAPP_PUBLIC_RATE_LIMIT_PER_MINUTE` replies per minute (default 10; `0` disables). Hawa warns a sender once when they hit the limit. Owners are not limited.
+- Text captions on images, videos, and documents, and messages in disappearing-message chats, are treated as normal text questions.
+
 To make the bot private again, set:
 
 ```env

@@ -20,6 +20,12 @@ export interface AgentConversation {
   userId: string;
 }
 
+export interface PromptContext {
+  senderName?: string;
+  isGroup?: boolean;
+  accessLevel?: 'owner' | 'public';
+}
+
 export interface ToolDefinition {
   name: string;
   description: string;
@@ -37,6 +43,7 @@ export interface LLMProvider {
     timezone: string;
     recentMessages: RecentMessage[];
     tools: ToolDefinition[];
+    context?: PromptContext;
   }): Promise<LLMDecision>;
   summarize?(text: string, mode?: string): Promise<string>;
 }
@@ -69,6 +76,8 @@ export interface OrchestratorMessage {
   messageId?: string;
   text: string;
   accessLevel?: 'owner' | 'public';
+  senderName?: string;
+  isGroup?: boolean;
 }
 
 export type AgentContext = ToolExecutionContext;
