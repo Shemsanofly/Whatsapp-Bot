@@ -12,6 +12,16 @@ export interface IncomingWhatsAppMessage {
   quotedParticipant?: string;
   /** Old message delivered on (re)connect: archive it, but do not reply. */
   isBacklog?: boolean;
+  /** Present for voice notes and audio files; text is empty until transcribed. */
+  audio?: IncomingWhatsAppAudio;
+  isVoiceNote?: boolean;
+}
+
+export interface IncomingWhatsAppAudio {
+  mimeType: string;
+  seconds?: number;
+  /** Downloads and decrypts the audio. Only call it when the message will be answered. */
+  download(): Promise<Buffer>;
 }
 
 export interface WhatsAppSendOptions {
@@ -40,5 +50,6 @@ export interface AgentOrchestratorPort {
     accessLevel?: 'owner' | 'public';
     senderName?: string;
     isGroup?: boolean;
+    isVoiceNote?: boolean;
   }): Promise<string>;
 }

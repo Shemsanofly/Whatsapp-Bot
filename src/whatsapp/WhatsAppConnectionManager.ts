@@ -1,12 +1,21 @@
 import makeWASocket, {
   DisconnectReason,
+  downloadMediaMessage,
   fetchLatestBaileysVersion,
   useMultiFileAuthState,
   type proto,
+  type WAMessage,
   type WASocket
 } from '@whiskeysockets/baileys';
 import qrcode from 'qrcode-terminal';
-import type { IncomingWhatsAppContact, IncomingWhatsAppMessage, WhatsAppHealth, WhatsAppSender, WhatsAppSendOptions } from './types.js';
+import type {
+  IncomingWhatsAppAudio,
+  IncomingWhatsAppContact,
+  IncomingWhatsAppMessage,
+  WhatsAppHealth,
+  WhatsAppSender,
+  WhatsAppSendOptions
+} from './types.js';
 import { logger } from '../utils/logger.js';
 import { normalizeWhatsAppNumber } from '../security/WhatsAppAuthorizer.js';
 
@@ -180,14 +189,16 @@ export class WhatsAppConnectionManager implements WhatsAppSender {
       ?? content.imageMessage?.caption
       ?? content.videoMessage?.caption
       ?? content.documentMessage?.caption;
-    if (!text) {
+    const audio = content.audioMessage ? this.toIncomingAudio(message, content.audioMessage) : undefined;
+    if (!text && !audio) {
       return undefined;
     }
     const timestamp = toDate(message.messageTimestamp);
     const contextInfo = content.extendedTextMessage?.contextInfo
       ?? content.imageMessage?.contextInfo
       ?? content.videoMessage?.contextInfo
-      ?? content.documentMessage?.contextInfo;
+      ?? content.documentMessage?.contextInfo
+      ?? content.audioMessage?.contextInfo;
 
     return {
       id: key.id ?? crypto.randomUUID(),
@@ -198,10 +209,30 @@ export class WhatsAppConnectionManager implements WhatsAppSender {
       pushName: message.pushName ?? undefined,
       fromMe: key.fromMe ?? false,
       timestamp,
-      text,
+      text: text ?? '',
       mentionedJids: contextInfo?.mentionedJid?.length ? contextInfo.mentionedJid : undefined,
       quotedParticipant: contextInfo?.participant ?? undefined,
-      isBacklog: this.isBacklog(timestamp) || undefined
+      isBacklog: this.isBacklog(timestamp) || undefined,
+      audio,
+      isVoiceNote: audio ? Boolean(content.audioMessage?.ptt) : undefined
+    };
+  }
+
+  private toIncomingAudio(message: proto.IWebMessageInfo, audio: proto.Message.IAudioMessage): IncomingWhatsAppAudio {
+    const socket = this.socket;
+    return {
+      // WhatsApp voice notes are "audio/ogg; codecs=opus"; transcription APIs want the bare type.
+      mimeType: (audio.mimetype ?? 'audio/ogg').split(';')[0]?.trim() || 'audio/ogg',
+      seconds: audio.seconds ?? undefined,
+      download: async () => {
+        if (!socket) {
+          throw new Error('WhatsApp is not connected');
+        }
+        return downloadMediaMessage(message as WAMessage, 'buffer', {}, {
+          logger,
+          reuploadRequest: socket.updateMediaMessage
+        });
+      }
     };
   }
 

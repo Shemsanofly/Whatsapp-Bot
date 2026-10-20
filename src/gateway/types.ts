@@ -12,6 +12,8 @@ export interface ChannelMessage {
   accessLevel?: 'owner' | 'public';
   fromSelf: boolean;
   isGroup?: boolean;
+  /** The text is an automatic transcript of a voice note or audio message. */
+  isVoiceNote?: boolean;
   text: string;
   timestamp: Date;
   raw?: unknown;

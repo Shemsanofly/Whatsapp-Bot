@@ -39,4 +39,17 @@ describe('OpenAIProvider', () => {
       ])
     }));
   });
+
+  it('transcribes voice notes with the configured transcription model', async () => {
+    const provider = new OpenAIProvider({ apiKey: 'test-key', model: 'gpt-4o-mini', transcriptionModel: 'whisper-1' });
+    const create = vi.fn().mockResolvedValue({ text: '  Habari, nikumbushe kesho  ' });
+    (provider as any).client = { audio: { transcriptions: { create } } };
+
+    const transcript = await provider.transcribe(Buffer.from('audio'), 'audio/ogg');
+
+    expect(transcript).toBe('Habari, nikumbushe kesho');
+    const request = create.mock.calls[0]?.[0];
+    expect(request.model).toBe('whisper-1');
+    expect(request.file.name).toBe('voice-note.ogg');
+  });
 });

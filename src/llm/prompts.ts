@@ -30,6 +30,9 @@ function buildContextLines(context: PromptContext): string[] {
   if (context.isGroup) {
     lines.push('This message was sent in a WhatsApp group where you were addressed. Your reply is visible to every member, so answer the sender directly and never share private information about the owner or other chats.');
   }
+  if (context.isVoiceNote) {
+    lines.push('The user sent a voice note that was transcribed automatically. The transcript may contain recognition errors; infer the most likely meaning, and ask a short clarification question if it is unclear. Reply in text.');
+  }
   if (context.accessLevel === 'public') {
     lines.push('This sender is a member of the public, not the owner.');
   }
@@ -38,6 +41,10 @@ function buildContextLines(context: PromptContext): string[] {
 
 function sanitizeName(name: string): string {
   return name.replace(/["\n\r]/g, ' ').trim().slice(0, 60);
+}
+
+export function buildTranscriptionPrompt(): string {
+  return 'Transcribe this WhatsApp voice note exactly as spoken, in the original language (often Swahili, English, or a mix). Return only the transcript text, with no commentary. If there is no intelligible speech, return an empty response.';
 }
 
 export function buildSummarizationPrompt(mode: string): string {

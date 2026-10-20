@@ -23,6 +23,7 @@ export interface AgentConversation {
 export interface PromptContext {
   senderName?: string;
   isGroup?: boolean;
+  isVoiceNote?: boolean;
   accessLevel?: 'owner' | 'public';
 }
 
@@ -46,6 +47,11 @@ export interface LLMProvider {
     context?: PromptContext;
   }): Promise<LLMDecision>;
   summarize?(text: string, mode?: string): Promise<string>;
+  transcribe?(audio: Buffer, mimeType: string): Promise<string>;
+}
+
+export interface AudioTranscriber {
+  transcribe(audio: Buffer, mimeType: string): Promise<string>;
 }
 
 export interface ConversationStore {
@@ -78,6 +84,7 @@ export interface OrchestratorMessage {
   accessLevel?: 'owner' | 'public';
   senderName?: string;
   isGroup?: boolean;
+  isVoiceNote?: boolean;
 }
 
 export type AgentContext = ToolExecutionContext;

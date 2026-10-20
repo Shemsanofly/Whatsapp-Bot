@@ -260,5 +260,34 @@ describe('WhatsAppConnectionManager', () => {
 
     expect(manager.getSelfIds()).toEqual(['255799999999']);
   });
+
+  it('emits voice notes with downloadable audio and no text', async () => {
+    const { WhatsAppConnectionManager } = await import('../../../src/whatsapp/WhatsAppConnectionManager.js');
+    const manager = new WhatsAppConnectionManager('.test-auth');
+    const seen: IncomingWhatsAppMessage[] = [];
+    manager.onMessage(async (message) => {
+      seen.push(message);
+    });
+
+    await manager.connect();
+    handlers.get('messages.upsert')?.({
+      type: 'notify',
+      messages: [{
+        key: { id: 'voice', remoteJid: '255700000000@s.whatsapp.net', fromMe: false },
+        message: { audioMessage: { mimetype: 'audio/ogg; codecs=opus', seconds: 7, ptt: true } },
+        messageTimestamp: Math.floor(Date.now() / 1000)
+      }]
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(seen).toEqual([
+      expect.objectContaining({
+        id: 'voice',
+        text: '',
+        isVoiceNote: true,
+        audio: expect.objectContaining({ mimeType: 'audio/ogg', seconds: 7, download: expect.any(Function) })
+      })
+    ]);
+  });
 });
 

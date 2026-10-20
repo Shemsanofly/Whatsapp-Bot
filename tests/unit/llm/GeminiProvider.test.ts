@@ -242,6 +242,25 @@ describe('GeminiProvider', () => {
 
     vi.unstubAllGlobals();
   });
+
+  it('transcribes voice notes by sending the audio inline', async () => {
+    const provider = new GeminiProvider({ apiKey: 'test-key', model: 'gemini-3.7-flash' });
+    const fetchMock = vi.fn().mockResolvedValue(response({
+      candidates: [{ content: { parts: [{ text: 'Remind me tomorrow' }] } }]
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const transcript = await provider.transcribe(Buffer.from('audio'), 'audio/ogg');
+
+    expect(transcript).toBe('Remind me tomorrow');
+    const body = JSON.parse(fetchMock.mock.calls[0]?.[1].body);
+    expect(body.contents[0].parts[0]).toEqual({
+      inlineData: { mimeType: 'audio/ogg', data: Buffer.from('audio').toString('base64') }
+    });
+    expect(body.systemInstruction.parts[0].text).toMatch(/transcribe/i);
+
+    vi.unstubAllGlobals();
+  });
 });
 
 function response(body: unknown) {

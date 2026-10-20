@@ -1,8 +1,12 @@
 import type { LLMDecision, LLMProvider, RecentMessage, ToolDefinition } from '../agent/types.js';
-import { buildSummarizationPrompt, buildSystemPrompt } from './prompts.js';
+import { buildSummarizationPrompt, buildSystemPrompt, buildTranscriptionPrompt } from './prompts.js';
 
 interface GeminiPart {
   text?: string;
+  inlineData?: {
+    mimeType: string;
+    data: string;
+  };
   functionCall?: {
     name?: string;
     args?: unknown;
@@ -62,6 +66,25 @@ export class GeminiProvider implements LLMProvider {
       kind: 'final',
       content: content || "I'm not sure how to respond to that yet."
     };
+  }
+
+  async transcribe(audio: Buffer, mimeType: string): Promise<string> {
+    const response = await this.generate({
+      systemInstruction: buildTranscriptionPrompt(),
+      contents: [{
+        role: 'user',
+        parts: [
+          { inlineData: { mimeType, data: audio.toString('base64') } },
+          { text: 'Transcribe this voice note.' }
+        ]
+      }]
+    });
+
+    return (response.candidates?.[0]?.content?.parts ?? [])
+      .map((part) => part.text)
+      .filter(Boolean)
+      .join(' ')
+      .trim();
   }
 
   async summarize(text: string, mode = 'summary'): Promise<string> {

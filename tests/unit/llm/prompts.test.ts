@@ -52,5 +52,11 @@ describe('buildSystemPrompt', () => {
     expect(prompt).not.toMatch(/WhatsApp group/i);
     expect(prompt).not.toMatch(/WhatsApp name/i);
   });
+
+  it('warns the agent that voice note transcripts may contain errors', () => {
+    const prompt = buildSystemPrompt('Africa/Dar_es_Salaam', { isVoiceNote: true });
+
+    expect(prompt).toMatch(/voice note that was transcribed/i);
+  });
 });
 

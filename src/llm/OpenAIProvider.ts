@@ -1,18 +1,28 @@
-import OpenAI from 'openai';
+import OpenAI, { toFile } from 'openai';
 import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources/chat/completions';
 import type { LLMDecision, LLMProvider, ToolDefinition } from '../agent/types.js';
 import { buildSummarizationPrompt, buildSystemPrompt } from './prompts.js';
 
-export class OpenAIProvider implements LLMProvider {
-  private readonly client: OpenAI;
+export interface OpenAIProviderOptions {
+  apiKey?: string;
+  model: string;
+  transcriptionModel?: string;
+  timeoutMs?: number;
+  /** For OpenAI-compatible APIs such as OpenRouter. */
+  baseURL?: string;
+  defaultHeaders?: Record<string, string>;
+  /** Extra provider-specific fields merged into every chat completion request. */
+  extraBody?: Record<string, unknown>;
+}
 
-  constructor(private readonly options: {
-    apiKey?: string;
-    model: string;
-    timeoutMs?: number;
-  }) {
+export class OpenAIProvider implements LLMProvider {
+  protected readonly client: OpenAI;
+
+  constructor(protected readonly options: OpenAIProviderOptions) {
     this.client = new OpenAI({
       apiKey: options.apiKey || 'missing-key',
+      baseURL: options.baseURL,
+      defaultHeaders: options.defaultHeaders,
       timeout: options.timeoutMs ?? 20_000,
       maxRetries: 1
     });
@@ -24,10 +34,10 @@ export class OpenAIProvider implements LLMProvider {
     }
 
     const response = await this.client.chat.completions.create({
+      ...this.options.extraBody,
       model: this.options.model,
       messages: buildMessages(input.text, buildSystemPrompt(input.timezone, input.context), input.recentMessages),
-      tools: input.tools.map(toOpenAITool),
-      tool_choice: 'auto',
+      ...(input.tools.length > 0 ? { tools: input.tools.map(toOpenAITool), tool_choice: 'auto' as const } : {}),
       temperature: 0.2
     });
     const message = response.choices[0]?.message;
@@ -45,11 +55,24 @@ export class OpenAIProvider implements LLMProvider {
     };
   }
 
+  async transcribe(audio: Buffer, mimeType: string): Promise<string> {
+    if (!this.options.apiKey) {
+      throw new Error('AI provider is not configured');
+    }
+    const extension = AUDIO_EXTENSIONS[mimeType] ?? 'ogg';
+    const response = await this.client.audio.transcriptions.create({
+      model: this.options.transcriptionModel ?? 'whisper-1',
+      file: await toFile(audio, `voice-note.${extension}`, { type: mimeType })
+    });
+    return response.text.trim();
+  }
+
   async summarize(text: string, mode = 'summary'): Promise<string> {
     if (!this.options.apiKey) {
       throw new Error('AI provider is not configured');
     }
     const response = await this.client.chat.completions.create({
+      ...this.options.extraBody,
       model: this.options.model,
       messages: [
         {
@@ -63,6 +86,15 @@ export class OpenAIProvider implements LLMProvider {
     return response.choices[0]?.message?.content || 'I could not summarize that content.';
   }
 }
+
+const AUDIO_EXTENSIONS: Record<string, string> = {
+  'audio/ogg': 'ogg',
+  'audio/mpeg': 'mp3',
+  'audio/mp4': 'm4a',
+  'audio/aac': 'm4a',
+  'audio/wav': 'wav',
+  'audio/webm': 'webm'
+};
 
 function buildMessages(text: string, systemPrompt: string, recentMessages: Parameters<LLMProvider['decide']>[0]['recentMessages']): ChatCompletionMessageParam[] {
   return [
